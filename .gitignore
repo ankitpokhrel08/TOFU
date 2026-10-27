@@ -1,1 +1,56 @@
+# macOS
 .DS_Store
+
+# IDE
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins-dependencies
+.packages
+.pub/
+.pub-cache/
+build/
+coverage/
+*.lock.bak
+*.log
+
+# Generated release/debug artifacts
+*.apk
+*.aab
+*.ipa
+*.dSYM/
+
+# Android
+android/.gradle/
+android/local.properties
+android/**/keystore.properties
+android/**/*.jks
+android/**/*.keystore
+android/app/debug
+android/app/profile
+android/app/release
+
+# iOS
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+ios/.symlinks/
+ios/Runner.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+ios/Runner.xcworkspace/xcuserdata/
+ios/Runner.xcodeproj/xcuserdata/
+ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# Environment
+.env
+.env.*
