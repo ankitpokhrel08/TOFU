@@ -1,5 +1,5 @@
 name: gym_guru
-description: "A new Flutter project."
+description: "Gym Guru: an AI personal trainer that counts reps, checks form and teaches one skill a day."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
