@@ -140,7 +140,11 @@ class _ShareCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text('30 day\nstreak', style: baloo(44, height: .95, color: Colors.white)),
                 const SizedBox(height: 8),
-                Text('Form score 91 · 142 lessons', style: nunito(14, color: AppColors.lime)),
+                // Two lines keep the stats clear of the mascot in the corner.
+                Text(
+                  'Form score 91\n142 lessons',
+                  style: nunito(14, height: 1.3, color: AppColors.lime),
+                ),
               ],
             ),
           ),
