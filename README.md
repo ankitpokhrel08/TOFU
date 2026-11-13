@@ -46,7 +46,7 @@ Most people quit training because sessions are long and form feedback is missing
 | **Sharing** | Streak, form-score and skill cards, sized for stories. |
 
 > [!NOTE]
-> This is a **UI-complete prototype**. Navigation, state and the lesson loop are fully working. The camera feed and pose data are **simulated**, so every set plays the same scripted sequence. Real pose estimation, persistence and payments are on the [roadmap](#roadmap).
+> This is an **MVP**. Rep counting and form checks run on-device with Google ML Kit pose detection, and progress is saved locally. Tracking currently understands **bodyweight squats** only, so every lesson uses a squat set. Devices without a usable camera can run a scripted demo set instead. Accounts, payments and cloud sync are on the [roadmap](#roadmap).
 
 ## Screenshots
 
@@ -106,6 +106,15 @@ lib/
 │   ├── onboarding_flow.dart      PageView flow, back handling, hand-off to the app
 │   ├── onboarding_controller.dart  Goals, minutes, level, quiz and plan selection
 │   └── screens/                  One widget per step (welcome → success)
+├── data/
+│   ├── models.dart               Profile, SessionResult, FormError (JSON-serialisable)
+│   └── progress_store.dart       On-device storage (shared_preferences)
+├── tracking/
+│   ├── tracker.dart              SquatTracker: setup → countdown → workout lifecycle
+│   ├── camera_tracker.dart       Front camera + ML Kit pose detection
+│   ├── squat_analyzer.dart       Rep counting, depth and knee checks (pure Dart)
+│   ├── simulated_tracker.dart    Scripted demo set for devices without a camera
+│   └── pose.dart                 Joints, landmarks and skeleton edges
 └── app/
     ├── main_shell.dart           Today / Path / Progress tabs and lesson routing
     ├── app_controller.dart       Streak, XP, path progress, today's session
@@ -115,8 +124,12 @@ lib/
 
 ### Design decisions
 
-- **State:** each flow owns one `ChangeNotifier` (`OnboardingController`, `AppController`), and screens rebuild through `ListenableBuilder`. This keeps the code free of dependencies while the data model settles. A state library can replace it once persistence lands.
-- **Simulation:** `CameraScreen` runs on a 300 ms tick, and each rep takes 8 ticks. The pose skeleton is drawn with `CustomPainter` from a depth curve. Scripted errors on reps 4 (knees cave in) and 9 (too shallow) exercise the coaching and results UI end to end.
+- **State:** each flow owns one `ChangeNotifier` (`OnboardingController`, `AppController`), and screens rebuild through `ListenableBuilder`. `AppController` derives streak, XP, the week strip and path progress from the stored sessions instead of keeping its own counters, so there is one source of truth.
+- **Pose tracking:** `CameraTracker` streams front-camera frames to ML Kit (stream mode, base model), dropping frames while the detector is busy so latency stays low. Landmarks are mapped into the upright, mirrored preview and drawn as a live skeleton.
+- **Squat analysis:** depth is the vertical hip-to-knee drop relative to shin length, calibrated to the user's standing pose. Unlike the 2D knee angle, this works whether the user faces the camera or stands side-on. A rep is flagged *shallow* if the hips never reach near knee height, and *knees in* if the knee gap collapses well below the ankle gap.
+- **Setup gate:** counting only starts once the whole body is in frame, landmarks are confident, and the hips have been still for about a second.
+- **Persistence and streaks:** the profile and every finished set are stored as JSON with `shared_preferences`. The streak counts consecutive training days and stays alive until midnight, so a missed day resets it. Returning users skip onboarding.
+- **Privacy:** camera frames are processed on the device and never stored or uploaded.
 - **Offline-first assets:** Baloo 2 and Nunito ship in `assets/google_fonts/` (with their OFL licences), and runtime font fetching is disabled. The app renders correctly with no network.
 - **Accessibility:** custom buttons and cards expose their own semantics nodes. Coaching cues are live regions, so screen readers announce them.
 
@@ -139,6 +152,10 @@ cd gym-guru
 flutter pub get
 flutter run
 ```
+
+### Tracking tips
+
+Use a physical phone: emulator cameras rarely give a usable feed. Prop the phone at about hip height, 2–3 m away, so your whole body from shoulders to feet is in frame, and train in good light. Counting starts once the three setup checks turn green. If camera access is denied or no camera is found, the app offers a scripted demo set.
 
 ### Build
 
@@ -163,15 +180,19 @@ flutter test
 
 | Suite | Covers |
 | --- | --- |
-| `widget_test.dart` | Welcome → goals navigation and progress header |
-| `app_flow_test.dart` | Paywall routing (annual starts the trial, monthly continues), and a full lesson from Today through camera, scripted errors and results to the updated streak |
+| `squat_analyzer_test.dart` | Rep counting, shallow and knees-in detection, wobble rejection, setup checks |
+| `app_controller_test.dart` | Streaks by date (including resets and midnight grace), week strip, path progress, totals, persistence across restarts |
+| `widget_test.dart` | New users land on onboarding and can advance |
+| `app_flow_test.dart` | Paywall routing, returning users skipping onboarding, and a full saved lesson from Today through results to the updated home screen |
 
 CI runs formatting, analysis and tests on every push and pull request, then builds the release APK.
 
 ## Roadmap
 
-- [ ] On-device pose estimation (ML Kit or MediaPipe) to replace the simulated skeleton
-- [ ] Local persistence for profile, sessions and streaks, followed by cloud sync
+- [x] On-device pose estimation with ML Kit
+- [x] Local persistence for profile, sessions and streaks
+- [ ] Tracking for more moves (hip hinge, push-up, lunge) so each lesson has its own exercise
+- [ ] Cloud sync
 - [ ] Account sign-in, including "I already have an account"
 - [ ] In-app purchases for the annual and monthly plans
 - [ ] Working share targets (Story, Message, Save)
