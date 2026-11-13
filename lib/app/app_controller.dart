@@ -2,35 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
-/// Reps per set in a lesson.
-const repTarget = 12;
+import '../data/models.dart';
+import '../data/progress_store.dart';
 
-class FormError {
-  const FormError(this.rep, this.title, this.tip);
-  final int rep;
-  final String title;
-  final String tip;
-}
-
-/// Outcome of one tracked set.
-class SessionResult {
-  const SessionResult({required this.repLog, required this.errors, required this.form});
-
-  /// true = clean rep, false = rep with a form error.
-  final List<bool> repLog;
-  final List<FormError> errors;
-  final int form;
-
-  int get reps => repLog.length;
-  int get cleanReps => repLog.where((r) => r).length;
-  int get xpGain => 40 + math.max(0, form - 80);
-
-  String get title => form >= 90
-      ? 'Crushed it!'
-      : form >= 80
-      ? 'Strong session!'
-      : 'Good start!';
-}
+export '../data/models.dart';
 
 class Lesson {
   const Lesson(this.number, this.name);
@@ -49,46 +24,136 @@ const pathLessons = [
   Lesson(8, 'Mobility flow'),
 ];
 
-/// Lessons 1–4 are unlocked for the current unit.
+/// Lessons unlocked from the start of the unit.
 const unlockedLessons = 4;
 
-/// User progress for the main app. Values before today's lesson are seeded
-/// to match a returning user mid-streak.
+/// Weekly challenge target (clean reps).
+const challengeTarget = 100;
+
+/// Main-app state derived from the stored profile and sessions.
 class AppController extends ChangeNotifier {
-  static const _baseStreak = 12;
-  static const _baseXp = 1840;
-  static const _baseChallenge = 64;
-  static const _baseReps = 640;
+  AppController(this._store, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
-  final String name = 'Alex';
+  final ProgressStore _store;
+  final DateTime Function() _clock;
 
-  SessionResult? _today;
+  Profile get profile => _store.profile!;
+  List<SessionResult> get sessions => _store.sessions;
 
-  /// Today's completed set, if any.
-  SessionResult? get today => _today;
-  bool get doneToday => _today != null;
+  DateTime get now => _clock();
+  DateTime get _today => _day(now);
 
-  int get streak => _baseStreak + (doneToday ? 1 : 0);
-  int get xp => _baseXp + (_today?.xpGain ?? 0);
-  int get totalReps => _baseReps + (_today?.reps ?? 0);
-  int get avgForm => 81;
-  int get errorsFixed => 23;
+  static DateTime _day(DateTime t) => DateTime(t.year, t.month, t.day);
 
-  /// Progress toward "100 clean squats" this week.
-  int get challenge =>
-      math.min(100, _baseChallenge + (doneToday ? math.max(_today!.cleanReps, 10) : 0));
+  Set<DateTime> get _trainedDays => {for (final s in sessions) _day(s.at)};
 
-  /// Lessons mastered on the path (lesson 1 was done before today).
-  int get masteredCount => doneToday ? 2 : 1;
+  /// The most recent set finished today, if any.
+  SessionResult? get today {
+    for (final s in sessions.reversed) {
+      if (_day(s.at) == _today) return s;
+    }
+    return null;
+  }
 
-  /// The lesson Home offers today.
-  Lesson get todaysLesson => pathLessons[1];
+  bool get doneToday => today != null;
 
-  /// Form score for the last 7 sessions, newest last.
-  List<int> get formHistory => [68, 72, 70, 79, 83, 86, _today?.form ?? 88];
+  /// Consecutive training days ending today, or yesterday if today isn't
+  /// done yet (the streak stays alive until midnight).
+  int get streak {
+    final days = _trainedDays;
+    var d = doneToday ? _today : _today.subtract(const Duration(days: 1));
+    var n = 0;
+    while (days.contains(d)) {
+      n++;
+      d = d.subtract(const Duration(days: 1));
+    }
+    return n;
+  }
 
-  void completeSession(SessionResult result) {
-    _today = result;
+  int get bestStreak {
+    final days = _trainedDays.toList()..sort();
+    var best = 0, run = 0;
+    DateTime? prev;
+    for (final d in days) {
+      run = prev != null && d.difference(prev).inHours.round() <= 25 ? run + 1 : 1;
+      best = math.max(best, run);
+      prev = d;
+    }
+    return best;
+  }
+
+  /// Monday-first training days for the current week.
+  List<bool> get week {
+    final monday = _today.subtract(Duration(days: _today.weekday - 1));
+    final days = _trainedDays;
+    return [for (var i = 0; i < 7; i++) days.contains(monday.add(Duration(days: i)))];
+  }
+
+  /// Index of today in [week].
+  int get todayIndex => _today.weekday - 1;
+
+  /// Day of the plan, counting the day onboarding finished as day 1.
+  int get planDay => _today.difference(_day(profile.createdAt)).inDays + 1;
+
+  int get xp => sessions.fold(0, (sum, s) => sum + s.xpGain);
+  int get totalReps => sessions.fold(0, (sum, s) => sum + s.reps);
+  int get errorsCaught => sessions.fold(0, (sum, s) => sum + s.errors.length);
+
+  int? get avgForm => sessions.isEmpty
+      ? null
+      : (sessions.fold(0, (sum, s) => sum + s.form) / sessions.length).round();
+
+  bool get hasPerfectSet => sessions.any((s) => s.form == 100 && s.reps >= repTarget);
+
+  /// Clean reps this week toward the weekly challenge.
+  int get challenge {
+    final monday = _today.subtract(Duration(days: _today.weekday - 1));
+    final clean = sessions
+        .where((s) => !_day(s.at).isBefore(monday))
+        .fold(0, (sum, s) => sum + s.cleanReps);
+    return math.min(challengeTarget, clean);
+  }
+
+  /// Distinct path lessons completed.
+  int get masteredCount => {for (final s in sessions) s.lesson}.length;
+
+  /// Lessons the user can see as unlocked on the path.
+  int get unlockedCount => math.max(unlockedLessons, masteredCount + 1);
+
+  /// Today's lesson: the one already done today (for practice), otherwise
+  /// the next one on the path.
+  Lesson get todaysLesson {
+    final done = today;
+    if (done != null) return pathLessons[done.lesson - 1];
+    return pathLessons[math.min(masteredCount, pathLessons.length - 1)];
+  }
+
+  /// The lesson that unlocks after today's.
+  Lesson? get nextLesson {
+    final i = todaysLesson.number;
+    return i < pathLessons.length ? pathLessons[i] : null;
+  }
+
+  /// Form scores for the last 7 sessions, oldest first.
+  List<int> get formHistory => [
+    for (final s in sessions.skip(math.max(0, sessions.length - 7))) s.form,
+  ];
+
+  /// Stamp a finished set with the current lesson and time, then save it.
+  Future<SessionResult> completeSession({
+    required List<bool> repLog,
+    required List<FormError> errors,
+    required int form,
+  }) async {
+    final result = SessionResult(
+      repLog: repLog,
+      errors: errors,
+      form: form,
+      at: now,
+      lesson: todaysLesson.number,
+    );
+    await _store.addSession(result);
     notifyListeners();
+    return result;
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../data/models.dart';
+
 class Goal {
   const Goal(this.id, this.title, this.subtitle, this.planName);
   final String id;
@@ -103,20 +105,24 @@ class OnboardingController extends ChangeNotifier {
     _plan = v;
     notifyListeners();
   }
+
+  /// Answers to keep once onboarding is finished.
+  Profile toProfile(DateTime now) => Profile(
+    goals: selectedGoals,
+    planName: planName,
+    minutes: _minutes,
+    levelShort: _level.short,
+    plan: _plan.name,
+    createdAt: now,
+  );
 }
 
 /// Navigation callbacks handed to each screen.
 class FlowNav {
-  const FlowNav({
-    required this.next,
-    required this.back,
-    required this.restart,
-    required this.startTrial,
-  });
+  const FlowNav({required this.next, required this.back, required this.enterApp});
   final VoidCallback next;
   final VoidCallback back;
-  final VoidCallback restart;
 
-  /// Leaves onboarding for the main app once the free trial starts.
-  final VoidCallback startTrial;
+  /// Saves the answers and leaves onboarding for the main app.
+  final VoidCallback enterApp;
 }

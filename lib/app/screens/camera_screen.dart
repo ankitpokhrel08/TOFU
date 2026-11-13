@@ -1,124 +1,89 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
+import '../../tracking/camera_tracker.dart';
+import '../../tracking/pose.dart';
+import '../../tracking/simulated_tracker.dart';
+import '../../tracking/squat_analyzer.dart';
+import '../../tracking/tracker.dart';
 import '../../widgets/common.dart';
 import '../../widgets/decor.dart';
 import '../app_controller.dart';
 import '../widgets/rep_dots.dart';
 import 'results_screen.dart';
 
-enum _Phase { setup, countdown, workout }
-
-const _tick = Duration(milliseconds: 300);
-const _ticksPerRep = 8;
-const _setupTicks = 9;
-const _ticksPerCount = 3;
-
-/// Squat depth through one rep, sampled per tick.
-const _depthCurve = [0.0, .35, .75, 1.0, 1.0, .7, .35, 0.0];
-
-/// Scripted form errors for the simulated set.
-const _scriptedErrors = {
-  4: FormError(4, 'Knees caved in', 'Push knees out over your toes'),
-  9: FormError(9, 'Too shallow', 'Hips should reach knee height'),
-};
-
-const _setupChecks = ['Whole body in frame', 'Good lighting', 'Phone steady at hip height'];
 const _praise = ['Nice depth!', 'Clean rep!', 'Chest proud, love it', 'Smooth!'];
 
-/// Camera setup → countdown → live tracked set. The camera feed and pose
-/// data are simulated.
+/// Camera setup → countdown → live tracked set, driven by a [SquatTracker].
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({super.key, required this.app});
+  const CameraScreen({super.key, required this.app, required this.trackerFactory});
 
   final AppController app;
+  final TrackerFactory trackerFactory;
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  late final Timer _timer;
-  _Phase _phase = _Phase.setup;
-  int _setup = 0;
-  int _count = 3;
-  int _countTicks = 0;
-  int _ticks = 0;
-  bool _paused = false;
+  late SquatTracker _tracker;
   bool _voice = true;
-  final _repLog = <bool>[];
-  final _errors = <FormError>[];
+  bool _finishing = false;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(_tick, (_) => _step());
+    _use(widget.trackerFactory());
+  }
+
+  void _use(SquatTracker t) {
+    _tracker = t..addListener(_onTracker);
+    t.start();
+  }
+
+  /// Swap in a fresh tracker (retry the camera, or fall back to the demo).
+  void _replace(SquatTracker t) {
+    _tracker
+      ..removeListener(_onTracker)
+      ..dispose();
+    setState(() => _use(t));
+  }
+
+  void _onTracker() {
+    if (!mounted) return;
+    if (_tracker.phase == TrackerPhase.done) {
+      _finish();
+    } else {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
-    _timer.cancel();
+    _tracker
+      ..removeListener(_onTracker)
+      ..dispose();
     super.dispose();
   }
 
-  void _step() {
-    switch (_phase) {
-      case _Phase.setup:
-        setState(() {
-          if (++_setup >= _setupTicks) _phase = _Phase.countdown;
-        });
-      case _Phase.countdown:
-        if (++_countTicks < _ticksPerCount) return;
-        _countTicks = 0;
-        setState(() {
-          if (_count > 1) {
-            _count--;
-          } else {
-            _phase = _Phase.workout;
-          }
-        });
-      case _Phase.workout:
-        if (_paused) return;
-        setState(() {
-          _ticks++;
-          if (_ticks % _ticksPerRep == 0) {
-            final rep = _repLog.length + 1;
-            final err = _scriptedErrors[rep];
-            _repLog.add(err == null);
-            if (err != null) {
-              _errors.add(err);
-              HapticFeedback.mediumImpact();
-            }
-          }
-        });
-        if (_repLog.length >= repTarget) _finish();
-    }
-  }
+  bool get _workout => _tracker.phase == TrackerPhase.workout;
 
-  int get _reps => _repLog.length;
-  int get _phaseTick => _ticks % _ticksPerRep;
-  int get _currentRep => _reps + 1;
-  bool get _workout => _phase == _Phase.workout;
-
-  double get _depth => _workout ? _depthCurve[_phaseTick] : 0;
-  bool get _kneeError => _workout && _currentRep == 4 && _depth > .6;
-  bool get _shallow => _workout && _currentRep == 9;
-  bool get _shallowError => _shallow && _phaseTick >= 3 && _phaseTick <= 5;
-  bool get _bad => _kneeError || _shallowError;
-
-  int get _form => _reps == 0 ? 100 : 100 - _errors.length * 9 - (_bad ? 6 : 0);
-
-  void _finish() {
-    _timer.cancel();
-    if (_reps == 0) {
+  Future<void> _finish() async {
+    if (_finishing) return;
+    _finishing = true;
+    final t = _tracker;
+    if (t.phase != TrackerPhase.done) t.finish();
+    if (t.reps == 0) {
       Navigator.of(context).pop();
       return;
     }
-    final result = SessionResult(repLog: List.of(_repLog), errors: List.of(_errors), form: _form);
-    widget.app.completeSession(result);
+    final result = await widget.app.completeSession(
+      repLog: t.repLog,
+      errors: t.errors,
+      form: t.finalScore,
+    );
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => ResultsScreen(app: widget.app, result: result),
@@ -128,7 +93,12 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final setup = !_workout;
+    final t = _tracker;
+    final blocked = switch (t.phase) {
+      TrackerPhase.permissionDenied || TrackerPhase.unavailable => true,
+      _ => false,
+    };
+    final setup = !_workout && t.phase != TrackerPhase.done;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -142,19 +112,34 @@ class _CameraScreenState extends State<CameraScreen> {
                 children: [
                   _TopBar(
                     setup: setup,
+                    tag: blocked
+                        ? 'NO CAMERA'
+                        : t.simulated
+                        ? (setup ? 'DEMO' : 'DEMO SET')
+                        : (setup ? 'CALIBRATING' : 'TRACKING'),
                     voice: _voice,
                     onBack: setup ? () => Navigator.of(context).pop() : _finish,
                     onToggleVoice: () => setState(() => _voice = !_voice),
                   ),
-                  Expanded(child: _viewport(setup)),
-                  if (setup)
-                    _SetupChecks(progress: _setup)
+                  Expanded(
+                    child: blocked
+                        ? _Blocked(
+                            denied: t.phase == TrackerPhase.permissionDenied,
+                            onRetry: () => _replace(widget.trackerFactory()),
+                            onDemo: () => _replace(SimulatedTracker()),
+                          )
+                        : _viewport(setup),
+                  ),
+                  if (blocked)
+                    const SizedBox(height: 16)
+                  else if (setup)
+                    _SetupChecks(checks: t.checks, starting: t.phase == TrackerPhase.starting)
                   else
                     _WorkoutControls(
                       cue: _cue(),
-                      repLog: _repLog,
-                      paused: _paused,
-                      onTogglePause: () => setState(() => _paused = !_paused),
+                      repLog: t.repLog,
+                      paused: t.paused,
+                      onTogglePause: () => t.setPaused(!t.paused),
                       onEnd: _finish,
                     ),
                 ],
@@ -167,19 +152,79 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Widget _viewport(bool setup) {
-    final calibrated = _setup > 2;
+    final t = _tracker;
+    final calibrated = t.checks.first;
+    final preview = t.buildPreview();
+    final previewSize = t is CameraTracker ? t.previewSize : null;
     return Stack(
       children: [
-        // Fixed 390×500 design canvas, scaled to fit the available space.
-        Positioned.fill(
-          child: FittedBox(
-            alignment: Alignment.topCenter,
-            child: SizedBox(
-              width: 390,
-              height: 500,
-              child: Stack(
-                children: [
-                  if (setup)
+        if (preview != null && previewSize != null)
+          // Real camera: fill the area, overlay the detected skeleton.
+          Positioned.fill(
+            child: ClipRect(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: previewSize.width,
+                  height: previewSize.height,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      preview,
+                      if (t.pose case final pose?)
+                        CustomPaint(
+                          painter: _LiveSkeletonPainter(
+                            pose,
+                            issue: t.liveIssue,
+                            dim: setup && !calibrated,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          // Demo: the stylised skeleton on a fixed 390×500 canvas.
+          Positioned.fill(
+            child: FittedBox(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: 390,
+                height: 500,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      left: 75,
+                      top: 86,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 300),
+                        opacity: setup ? (calibrated ? .9 : .3) : 1,
+                        child: CustomPaint(
+                          size: const Size(240, 360),
+                          painter: _PosePainter(
+                            depth: t.depth,
+                            kneeError: t.liveIssue == FormIssue.kneesIn,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        if (setup)
+          // Body outline guide.
+          Positioned.fill(
+            child: FittedBox(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: 390,
+                height: 500,
+                child: Stack(
+                  children: [
                     Positioned(
                       left: 90,
                       top: 60,
@@ -198,35 +243,22 @@ class _CameraScreenState extends State<CameraScreen> {
                         ),
                       ),
                     ),
-                  Positioned(
-                    left: 75,
-                    top: 86,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 300),
-                      opacity: setup ? (calibrated ? .9 : .3) : 1,
-                      child: CustomPaint(
-                        size: const Size(240, 360),
-                        painter: _PosePainter(
-                          depth: _shallow ? _depth * .55 : _depth,
-                          kneeError: _kneeError,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
+        if (t.phase == TrackerPhase.starting)
+          const Center(child: CircularProgressIndicator(color: AppColors.pink)),
         if (_workout) ...[
-          Positioned(left: 18, top: 12, child: _RepCounter(reps: _reps)),
+          Positioned(left: 18, top: 12, child: _RepCounter(reps: t.reps)),
           Positioned(
             right: 18,
             top: 12,
-            child: _FormReadout(form: _form, seconds: _ticks * .3),
+            child: _FormReadout(form: t.formScore, seconds: t.elapsed.inMilliseconds / 1000),
           ),
         ],
-        if (_phase == _Phase.countdown)
+        if (t.phase == TrackerPhase.countdown)
           Center(
             child: Container(
               width: 150,
@@ -241,14 +273,14 @@ class _CameraScreenState extends State<CameraScreen> {
                 duration: const Duration(milliseconds: 200),
                 transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
                 child: Text(
-                  '$_count',
-                  key: ValueKey(_count),
+                  '${t.count}',
+                  key: ValueKey(t.count),
                   style: baloo(92, height: 1, color: Colors.white),
                 ),
               ),
             ),
           ),
-        if (_workout && _paused)
+        if (_workout && t.paused)
           Positioned.fill(
             child: ColoredBox(
               color: AppColors.inkDeep.withValues(alpha: .82),
@@ -271,17 +303,25 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   _Cue _cue() {
-    if (_kneeError) {
+    final t = _tracker;
+    if (!t.bodyVisible) {
+      return const _Cue('Step back so I can see your whole body', AppColors.orange, 'laptop');
+    }
+    if (t.liveIssue == FormIssue.kneesIn) {
       return const _Cue('Knees caving in! Push them out', AppColors.red, 'laptop');
     }
-    if (_shallowError) {
+    if (t.liveIssue == FormIssue.shallow) {
       return const _Cue('Go lower: hips to knee height', AppColors.orange, 'laptop');
     }
-    if (_repLog.isNotEmpty && _repLog.last && _phaseTick < 2) {
-      return _Cue(_praise[_reps % _praise.length], AppColors.green, 'cheer');
+    final since = t.sinceLastRep;
+    if (t.repLog.isNotEmpty &&
+        t.repLog.last &&
+        since != null &&
+        since < const Duration(milliseconds: 700)) {
+      return _Cue(_praise[t.reps % _praise.length], AppColors.green, 'cheer');
     }
-    if (_reps >= repTarget - 3) {
-      return _Cue("${repTarget - _reps} more, you've got this!", AppColors.purple, 'lift');
+    if (t.reps >= repTarget - 3) {
+      return _Cue("${repTarget - t.reps} more, you've got this!", AppColors.purple, 'lift');
     }
     return _Cue(
       "Sit back like there's a chair behind you",
@@ -289,6 +329,109 @@ class _CameraScreenState extends State<CameraScreen> {
       'zen',
     );
   }
+}
+
+/// Shown when the camera can't be used.
+class _Blocked extends StatelessWidget {
+  const _Blocked({required this.denied, required this.onRetry, required this.onDemo});
+
+  final bool denied;
+  final VoidCallback onRetry;
+  final VoidCallback onDemo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          spacing: 14,
+          children: [
+            Image.asset('assets/mascot/laptop.png', width: 140),
+            Text(
+              denied ? 'Camera access is off' : 'No camera available',
+              textAlign: TextAlign.center,
+              style: baloo(26, color: Colors.white),
+            ),
+            Text(
+              denied
+                  ? 'Guru needs the camera to count reps and check your form. '
+                        'Allow camera access for Gym Guru in Settings, then try again.'
+                  : "This device doesn't have a camera Guru can use. "
+                        'You can still try the demo set.',
+              textAlign: TextAlign.center,
+              style: nunito(15, weight: FontWeight.w600, height: 1.4, color: AppColors.textOnDark),
+            ),
+            const SizedBox(height: 6),
+            if (denied) ChunkyButton(label: 'Try again', onPressed: onRetry),
+            ChunkyButton(
+              label: 'Try the demo set',
+              onPressed: onDemo,
+              color: Colors.white.withValues(alpha: .14),
+              shadowColor: Colors.transparent,
+              shadowDepth: 0,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Detected skeleton over the camera preview, in image pixel coordinates.
+class _LiveSkeletonPainter extends CustomPainter {
+  _LiveSkeletonPainter(this.pose, {required this.issue, required this.dim});
+
+  final PoseSnapshot pose;
+  final FormIssue? issue;
+  final bool dim;
+
+  static bool _isLeg(Joint j) =>
+      j == Joint.leftKnee || j == Joint.rightKnee || j == Joint.leftAnkle || j == Joint.rightAnkle;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.scale(size.width / pose.imageSize.width, size.height / pose.imageSize.height);
+    final unit = pose.imageSize.shortestSide / 100;
+    final alpha = dim ? .45 : 1.0;
+    final legColor = issue == FormIssue.kneesIn ? AppColors.red : AppColors.lime;
+
+    for (final (a, b) in skeletonBones) {
+      final pa = pose[a], pb = pose[b];
+      if (pa == null || pb == null || pa.confidence < .5 || pb.confidence < .5) continue;
+      final leg = _isLeg(a) || _isLeg(b);
+      canvas.drawLine(
+        pa.offset,
+        pb.offset,
+        Paint()
+          ..color = (leg ? legColor : AppColors.lime).withValues(alpha: alpha)
+          ..strokeWidth = unit * 1.2
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+    for (final MapEntry(key: j, value: p) in pose.points.entries) {
+      if (p.confidence < .5 || j == Joint.nose) continue;
+      final knee = j == Joint.leftKnee || j == Joint.rightKnee;
+      canvas
+        ..drawCircle(
+          p.offset,
+          unit * (knee ? 2 : 1.4),
+          Paint()..color = (knee ? legColor : Colors.white).withValues(alpha: alpha),
+        )
+        ..drawCircle(
+          p.offset,
+          unit * (knee ? 2 : 1.4),
+          Paint()
+            ..color = AppColors.lime.withValues(alpha: alpha)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = unit * .6,
+        );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LiveSkeletonPainter old) =>
+      old.pose != pose || old.issue != issue || old.dim != dim;
 }
 
 class _Cue {
@@ -301,12 +444,14 @@ class _Cue {
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.setup,
+    required this.tag,
     required this.voice,
     required this.onBack,
     required this.onToggleVoice,
   });
 
   final bool setup;
+  final String tag;
   final bool voice;
   final VoidCallback onBack;
   final VoidCallback onToggleVoice;
@@ -340,10 +485,7 @@ class _TopBar extends StatelessWidget {
                   height: 7,
                   decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                 ),
-                Text(
-                  setup ? 'CALIBRATING' : 'TRACKING',
-                  style: nunito(11, weight: FontWeight.w900, letterSpacing: 1.1),
-                ),
+                Text(tag, style: nunito(11, weight: FontWeight.w900, letterSpacing: 1.1)),
               ],
             ),
           ),
@@ -450,9 +592,10 @@ class _FormReadout extends StatelessWidget {
 }
 
 class _SetupChecks extends StatelessWidget {
-  const _SetupChecks({required this.progress});
+  const _SetupChecks({required this.checks, required this.starting});
 
-  final int progress;
+  final List<bool> checks;
+  final bool starting;
 
   @override
   Widget build(BuildContext context) {
@@ -461,10 +604,10 @@ class _SetupChecks extends StatelessWidget {
       child: Column(
         spacing: 8,
         children: [
-          for (final (i, label) in _setupChecks.indexed)
+          for (final (i, label) in setupCheckLabels.indexed)
             Builder(
               builder: (context) {
-                final ok = progress > i * 3 + 2;
+                final ok = !starting && checks[i];
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(

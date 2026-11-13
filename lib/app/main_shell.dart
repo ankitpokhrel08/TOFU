@@ -3,7 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/progress_store.dart';
 import '../theme/app_theme.dart';
+import '../tracking/camera_tracker.dart';
+import '../tracking/tracker.dart';
 import 'app_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/learn_screen.dart';
@@ -12,14 +15,27 @@ import 'screens/stats_screen.dart';
 
 /// Main app: Today / Path / Progress tabs.
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  const MainShell({
+    super.key,
+    required this.store,
+    this.trackerFactory = CameraTracker.new,
+    this.clock,
+  });
+
+  final ProgressStore store;
+
+  /// Tracker used for each set. Defaults to the real camera.
+  final TrackerFactory trackerFactory;
+
+  /// Override "now" in tests.
+  final DateTime Function()? clock;
 
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
 class _MainShellState extends State<MainShell> {
-  final _controller = AppController();
+  late final _controller = AppController(widget.store, clock: widget.clock);
   int _tab = 0;
 
   @override
@@ -28,9 +44,11 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
-  void _openLesson() =>
-      Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => LearnScreen(app: _controller)));
+  void _openLesson() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => LearnScreen(app: _controller, trackerFactory: widget.trackerFactory),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {

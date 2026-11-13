@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../app/main_shell.dart';
-
+import '../data/progress_store.dart';
+import '../tracking/camera_tracker.dart';
+import '../tracking/tracker.dart';
 import 'onboarding_controller.dart';
 import 'screens/form_check_screen.dart';
 import 'screens/goals_screen.dart';
@@ -16,9 +18,12 @@ import 'screens/streak_screen.dart';
 import 'screens/success_screen.dart';
 import 'screens/welcome_screen.dart';
 
-/// Welcome → 10-step onboarding → paywall → success.
+/// Welcome → 10-step onboarding → paywall → success → main app.
 class OnboardingFlow extends StatefulWidget {
-  const OnboardingFlow({super.key});
+  const OnboardingFlow({super.key, required this.store, this.trackerFactory = CameraTracker.new});
+
+  final ProgressStore store;
+  final TrackerFactory trackerFactory;
 
   @override
   State<OnboardingFlow> createState() => _OnboardingFlowState();
@@ -35,15 +40,21 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   late final _nav = FlowNav(
     next: () => _go(_index + 1),
     back: () => _go(_index - 1),
-    restart: () => _go(0),
-    startTrial: _startTrial,
+    enterApp: _enterApp,
   );
 
-  void _startTrial() {
+  bool _leaving = false;
+
+  Future<void> _enterApp() async {
+    if (_leaving) return;
+    _leaving = true;
+    await widget.store.saveProfile(_controller.toProfile(DateTime.now()));
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (_, _, _) => const MainShell(),
+        pageBuilder: (_, _, _) =>
+            MainShell(store: widget.store, trackerFactory: widget.trackerFactory),
         transitionsBuilder: (_, a, _, child) => FadeTransition(opacity: a, child: child),
       ),
     );

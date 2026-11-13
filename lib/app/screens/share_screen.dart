@@ -35,7 +35,7 @@ class _ShareScreenState extends State<ShareScreen> {
     _CardKind.streak => _CardStyle(
       '${widget.streak}',
       'day streak',
-      'Never missed a day this month',
+      widget.streak == 1 ? 'Day one, done' : 'Showing up, day after day',
       AppColors.orange,
       Colors.white,
       'summit',
@@ -48,10 +48,10 @@ class _ShareScreenState extends State<ShareScreen> {
       Colors.white,
       'lift',
     ),
-    _CardKind.skill => const _CardStyle(
-      'Lvl 2',
-      'Squat depth',
-      'Skill mastered today',
+    _CardKind.skill => _CardStyle(
+      'Lvl ${widget.result.lesson}',
+      pathLessons[widget.result.lesson - 1].name,
+      'Skill practised today',
       AppColors.lime,
       AppColors.ink,
       'cheer',
@@ -256,7 +256,7 @@ class _Card extends StatelessWidget {
             left: 24,
             bottom: 22,
             child: Text(
-              'Train with Guru\ngymguru.app/alex',
+              'Train with Guru\ngymguru.app',
               style: nunito(12, color: fg.withValues(alpha: .8)),
             ),
           ),

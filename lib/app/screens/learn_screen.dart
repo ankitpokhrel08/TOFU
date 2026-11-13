@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../tracking/tracker.dart';
 import '../../widgets/common.dart';
 import '../../widgets/decor.dart';
 import '../app_controller.dart';
@@ -14,9 +15,10 @@ const _cues = [
 
 /// Lesson step 1: watch the move and learn the cues.
 class LearnScreen extends StatelessWidget {
-  const LearnScreen({super.key, required this.app});
+  const LearnScreen({super.key, required this.app, required this.trackerFactory});
 
   final AppController app;
+  final TrackerFactory trackerFactory;
 
   @override
   Widget build(BuildContext context) {
@@ -41,9 +43,11 @@ class LearnScreen extends StatelessWidget {
         bodyPadding: const EdgeInsets.fromLTRB(22, 16, 22, 8),
         footer: ChunkyButton(
           label: 'Got it, open camera',
-          onPressed: () =>
-              Navigator.of(context)
-                  .push(MaterialPageRoute<void>(builder: (_) => CameraScreen(app: app))),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CameraScreen(app: app, trackerFactory: trackerFactory),
+            ),
+          ),
         ),
         children: [
           Column(
@@ -52,6 +56,11 @@ class LearnScreen extends StatelessWidget {
               Eyebrow('LESSON ${lesson.number} · 1 MIN', color: AppColors.pink),
               const SizedBox(height: 2),
               Text(lesson.name, style: baloo(30, height: 1.05)),
+              const SizedBox(height: 4),
+              Text(
+                'Tracked move: $repTarget bodyweight squats',
+                style: nunito(14, weight: FontWeight.w700, color: AppColors.textMuted),
+              ),
             ],
           ),
           const _VideoPlaceholder(),

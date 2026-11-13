@@ -2,11 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gym_guru/main.dart';
 
+import 'helpers.dart';
+
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
-  testWidgets('welcome screen advances to goals', (tester) async {
-    await tester.pumpWidget(const GymGuruApp());
+  testWidgets('new users start onboarding and can advance to goals', (tester) async {
+    final store = await tester.runAsync(makeStore);
+    await tester.pumpWidget(GymGuruApp(store: store!));
     expect(find.text("Let's get started"), findsOneWidget);
 
     await tester.tap(find.text("Let's get started"));

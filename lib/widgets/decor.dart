@@ -104,12 +104,16 @@ class Teardrop extends StatelessWidget {
   }
 }
 
-/// M–S week row: first [done] days filled, optional dashed ring on [ringAt].
+/// M–S week row: the first [done] days filled (or exactly the days set in
+/// [days]), with an optional dashed ring on [ringAt].
 class WeekStrip extends StatelessWidget {
-  const WeekStrip({super.key, required this.done, this.ringAt});
+  const WeekStrip({super.key, this.done = 0, this.days, this.ringAt});
 
   final int done;
+  final List<bool>? days;
   final int? ringAt;
+
+  bool _on(int i) => days != null ? days![i] : i < done;
 
   static const _labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -127,7 +131,7 @@ class WeekStrip extends StatelessWidget {
                 width: 36,
                 height: 36,
                 child: CustomPaint(
-                  foregroundPainter: i == ringAt && i >= done
+                  foregroundPainter: i == ringAt && !_on(i)
                       ? const DashedOutlinePainter(
                           color: AppColors.orange,
                           circle: true,
@@ -139,9 +143,9 @@ class WeekStrip extends StatelessWidget {
                     duration: const Duration(milliseconds: 300),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: i < done ? AppColors.orange : const Color(0xFFF6EEF9),
+                      color: _on(i) ? AppColors.orange : const Color(0xFFF6EEF9),
                     ),
-                    child: i < done
+                    child: _on(i)
                         ? const Icon(Icons.check_rounded, size: 18, color: Colors.white)
                         : null,
                   ),

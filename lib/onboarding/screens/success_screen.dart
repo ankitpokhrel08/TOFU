@@ -70,7 +70,7 @@ class SuccessScreen extends StatelessWidget {
                       color: AppColors.lime,
                       shadowColor: AppColors.limeDark,
                       textColor: AppColors.ink,
-                      onPressed: nav.restart,
+                      onPressed: nav.enterApp,
                     ),
                     const SizedBox(height: 5),
                     const GhostButton(label: 'Share my Day 1'),

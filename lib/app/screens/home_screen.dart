@@ -5,8 +5,6 @@ import '../../widgets/common.dart';
 import '../../widgets/decor.dart';
 import '../app_controller.dart';
 
-const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.app, required this.onStartLesson});
 
@@ -15,14 +13,13 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now().weekday - 1;
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 6, 22, 16),
       children: [
-        _Header(app: app, weekday: _weekdays[today]),
+        _Header(app: app),
         const SizedBox(height: 16),
         if (app.doneToday) ...[
-          const _DoneCard(),
+          _DoneCard(next: app.nextLesson),
           const SizedBox(height: 16),
           ChunkyButton(
             label: 'Practice again for bonus XP',
@@ -37,9 +34,13 @@ class HomeScreen extends StatelessWidget {
           ),
         ] else ...[
           const SizedBox(height: 22),
-          _LessonCard(lesson: app.todaysLesson, onStart: onStartLesson),
+          _LessonCard(
+            lesson: app.todaysLesson,
+            minutes: app.profile.minutes,
+            onStart: onStartLesson,
+          ),
           const SizedBox(height: 16),
-          const _StreakReminder(),
+          _StreakReminder(streak: app.streak),
         ],
         const SizedBox(height: 16),
         OutlinedCard(
@@ -58,7 +59,7 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              WeekStrip(done: today + (app.doneToday ? 1 : 0), ringAt: today),
+              WeekStrip(days: app.week, ringAt: app.todayIndex),
             ],
           ),
         ),
@@ -70,10 +71,18 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.app, required this.weekday});
+  const _Header({required this.app});
 
   final AppController app;
-  final String weekday;
+
+  String get _greeting {
+    final h = app.now.hour;
+    return h < 12
+        ? 'Good morning!'
+        : h < 18
+        ? 'Good afternoon!'
+        : 'Good evening!';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,21 +93,24 @@ class _Header extends StatelessWidget {
           width: 44,
           height: 44,
           alignment: Alignment.center,
+          padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: AppColors.purple,
+            color: AppColors.purpleTint,
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Text(app.name[0], style: baloo(20, color: Colors.white)),
+          child: Image.asset('assets/mascot/cheer.png'),
         ),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                weekday,
+                '${app.profile.planName} · Day ${app.planDay}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: nunito(13, weight: FontWeight.w700, color: AppColors.textMuted),
               ),
-              Text('Hey ${app.name}!', style: baloo(20, height: 1.1)),
+              Text(_greeting, style: baloo(20, height: 1.1)),
             ],
           ),
         ),
@@ -171,9 +183,10 @@ class _CounterPill extends StatelessWidget {
 }
 
 class _LessonCard extends StatelessWidget {
-  const _LessonCard({required this.lesson, required this.onStart});
+  const _LessonCard({required this.lesson, required this.minutes, required this.onStart});
 
   final Lesson lesson;
+  final int minutes;
   final VoidCallback onStart;
 
   @override
@@ -197,7 +210,7 @@ class _LessonCard extends StatelessWidget {
               Text(lesson.name, style: baloo(30, height: 1.05, color: Colors.white)),
               const SizedBox(height: 6),
               Text(
-                '5 min · camera · $repTarget reps',
+                '$minutes min · camera · $repTarget reps',
                 style: nunito(14, weight: FontWeight.w700, color: const Color(0xFFE6D6FF)),
               ),
               const SizedBox(height: 16),
@@ -219,7 +232,9 @@ class _LessonCard extends StatelessWidget {
 }
 
 class _StreakReminder extends StatelessWidget {
-  const _StreakReminder();
+  const _StreakReminder({required this.streak});
+
+  final int streak;
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +246,9 @@ class _StreakReminder extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              'Your streak ends at midnight. 5 minutes keeps it alive!',
+              streak > 0
+                  ? 'Your $streak-day streak ends at midnight. One lesson keeps it alive!'
+                  : 'Start a streak today. One short lesson is all it takes.',
               style: nunito(14, height: 1.35, color: const Color(0xFF8A1A52)),
             ),
           ),
@@ -243,7 +260,9 @@ class _StreakReminder extends StatelessWidget {
 }
 
 class _DoneCard extends StatelessWidget {
-  const _DoneCard();
+  const _DoneCard({required this.next});
+
+  final Lesson? next;
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +281,9 @@ class _DoneCard extends StatelessWidget {
                 Text('Streak safe. Rest up!', style: baloo(20, height: 1.1)),
                 const SizedBox(height: 4),
                 Text(
-                  '${pathLessons[2].name} unlocks tomorrow',
+                  next == null
+                      ? 'Path complete. Keep practising!'
+                      : '${next!.name} unlocks tomorrow',
                   style: nunito(13, weight: FontWeight.w700, color: AppColors.textMuted),
                 ),
               ],

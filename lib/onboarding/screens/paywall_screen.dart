@@ -118,7 +118,7 @@ class PaywallScreen extends StatelessWidget {
                         ChunkyButton(
                           label: annual ? 'Start my 7-day free trial' : 'Continue with Monthly',
                           height: 60,
-                          onPressed: annual ? nav.startTrial : nav.next,
+                          onPressed: annual ? nav.enterApp : nav.next,
                         ),
                         const SizedBox(height: 5),
                         Text(

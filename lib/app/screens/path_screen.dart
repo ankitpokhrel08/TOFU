@@ -56,7 +56,7 @@ class PathScreen extends StatelessWidget {
                     padding: EdgeInsets.only(left: _insets[i] * scale),
                     child: _Node(
                       lesson: lesson,
-                      status: _statusFor(i, mastered),
+                      status: _statusFor(i, mastered, app.unlockedCount),
                       doneToday: app.doneToday,
                       onTap: onStartLesson,
                     ),
@@ -69,10 +69,10 @@ class PathScreen extends StatelessWidget {
     );
   }
 
-  static _Status _statusFor(int i, int mastered) {
+  static _Status _statusFor(int i, int mastered, int unlocked) {
     if (i < mastered) return _Status.mastered;
     if (i == mastered) return _Status.current;
-    return i < unlockedLessons ? _Status.unlocked : _Status.locked;
+    return i < unlocked ? _Status.unlocked : _Status.locked;
   }
 }
 
