@@ -6,70 +6,78 @@
 
 **An AI personal trainer that fits in five minutes a day.**
 
-Gym Guru teaches one movement skill per day, watches each rep through the camera,<br/>
-and coaches form in real time, with streaks to keep the habit going.
+Gym Guru watches each rep through your phone's camera, coaches your form in real time,<br/>
+and turns training into a game: 20 levels, stars, XP, streaks and a global leaderboard.
 
 [![CI](https://github.com/ankitpokhrel08/gym-guru/actions/workflows/ci.yml/badge.svg)](https://github.com/ankitpokhrel08/gym-guru/actions/workflows/ci.yml)
 ![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter&logoColor=white)
 ![Dart](https://img.shields.io/badge/Dart-3.13-0175C2?logo=dart&logoColor=white)
-![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS-555)
+![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore-FFCA28?logo=firebase&logoColor=black)
+![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)
 
 [Overview](#overview) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Getting started](#getting-started) · [Roadmap](#roadmap)
 
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/03-form-check.png" width="230" alt="Live form check"/>
+  <img src="docs/screenshots/06-today.png" width="230" alt="Today"/>
   &nbsp;&nbsp;
-  <img src="docs/screenshots/07-today.png" width="230" alt="Today tab"/>
+  <img src="docs/screenshots/07-workout-intro.png" width="230" alt="Workout intro with exercise animations"/>
   &nbsp;&nbsp;
-  <img src="docs/screenshots/10-live-set.png" width="230" alt="Tracked set"/>
+  <img src="docs/screenshots/09-levels.png" width="230" alt="Levels"/>
 </p>
 
 ## Overview
 
-Most people quit training because sessions are long and form feedback is missing. Gym Guru turns training into short daily lessons:
+Most people quit training because sessions run long and nobody checks their form. Gym Guru keeps workouts short and gives feedback on every rep:
 
-1. **Learn** one skill, such as squat depth, from a short demo and three cues.
-2. **Practise** a tracked set of 12 reps in front of the phone camera.
-3. **Review** a form score, rep-by-rep errors and XP, then keep the streak alive.
+1. **Pick a level.** Each one is a short workout of 2–5 exercises with an animated demo of each move.
+2. **Train in front of the camera.** On-device pose tracking counts reps, times holds and flags form mistakes as they happen.
+3. **Level up.** Earn 1–3 stars, XP and badges, keep your daily streak, and climb the weekly leaderboard.
 
 ### Features
 
 | | |
 | --- | --- |
-| **Onboarding** | Ten steps (goals, daily time, level, a sample lesson) that end in a personal 30-day plan and a free-trial paywall. |
-| **Daily lesson loop** | Learn → camera setup → countdown → tracked set → results → share. |
-| **Form coaching** | Live rep counter, form score and contextual cues. Errors are flagged on the exact rep where they happen. |
-| **Skill path** | Units of movement skills with mastered, current and locked states. One new lesson unlocks per day. |
-| **Progress** | Streak, XP, weekly challenge, 7-session form trend and achievements. |
-| **Sharing** | Streak, form-score and skill cards, sized for stories. |
+| **Google sign-in** | Firebase Auth. Progress syncs across devices and works offline. |
+| **Short setup** | Name and public nickname, one goal, daily minutes, experience and pain limitations. All editable later in Profile. |
+| **6 tracked exercises** | Squat, push-up, plank, reverse lunge, glute bridge and jumping jacks, each with its own form checks. |
+| **20 levels** | 4 units of 5, each ending in a boss level. New exercises arrive unit by unit, and experience sets where you start. |
+| **Adapts to you** | Knee pain swaps lunges and jumping for bridges and eases squat depth; lower-back pain shortens planks. |
+| **Recommendations** | Today offers your next level plus a drill aimed at your weakest exercise and most common mistake. |
+| **Gamification** | Stars, XP, 6 ranks (Rookie → Legend), 9 badges, a daily-goal ring, streaks with earned freezes, and rewards for unlocks and rank-ups. |
+| **Leaderboard** | Weekly and all-time, top 50 plus your rank, shown by nickname only. |
 
 > [!NOTE]
-> This is an **MVP**. Rep counting and form checks run on-device with Google ML Kit pose detection, and progress is saved locally. Tracking currently understands **bodyweight squats** only, so every lesson uses a squat set. Devices without a usable camera can run a scripted demo set instead. Accounts, payments and cloud sync are on the [roadmap](#roadmap).
+> Rep counting runs entirely on the device with Google ML Kit. Camera frames are never stored or uploaded. If the camera is unavailable or can't see you, the app offers a clearly labelled **demo set** that earns nothing.
 
 ## Screenshots
 
-**Onboarding**
+**Sign-in and setup**
 
 <p>
-  <img src="docs/screenshots/01-welcome.png" width="160" alt="Welcome"/>
-  <img src="docs/screenshots/02-goals.png" width="160" alt="Goal selection"/>
-  <img src="docs/screenshots/03-form-check.png" width="160" alt="AI form check demo"/>
-  <img src="docs/screenshots/04-quiz.png" width="160" alt="Sample lesson quiz"/>
-  <img src="docs/screenshots/05-plan-ready.png" width="160" alt="Personal plan"/>
-  <img src="docs/screenshots/06-paywall.png" width="160" alt="Free-trial paywall"/>
+  <img src="docs/screenshots/01-welcome.png" width="160" alt="Welcome and Google sign-in"/>
+  <img src="docs/screenshots/02-name.png" width="160" alt="Name and nickname"/>
+  <img src="docs/screenshots/03-goal.png" width="160" alt="Goal"/>
+  <img src="docs/screenshots/04-limitations.png" width="160" alt="Pain or limits"/>
+  <img src="docs/screenshots/05-plan.png" width="160" alt="Your plan"/>
 </p>
 
-**Core app**
+**Training**
 
 <p>
-  <img src="docs/screenshots/07-today.png" width="160" alt="Today"/>
-  <img src="docs/screenshots/08-path.png" width="160" alt="Skill path"/>
-  <img src="docs/screenshots/09-progress.png" width="160" alt="Progress"/>
-  <img src="docs/screenshots/10-live-set.png" width="160" alt="Tracked set"/>
-  <img src="docs/screenshots/11-results.png" width="160" alt="Lesson results"/>
-  <img src="docs/screenshots/12-share.png" width="160" alt="Share card"/>
+  <img src="docs/screenshots/06-today.png" width="160" alt="Today"/>
+  <img src="docs/screenshots/07-workout-intro.png" width="160" alt="Workout intro"/>
+  <img src="docs/screenshots/08-next-up.png" width="160" alt="Next exercise"/>
+  <img src="docs/screenshots/09-levels.png" width="160" alt="Levels"/>
+</p>
+
+**Progress and profile**
+
+<p>
+  <img src="docs/screenshots/10-leaderboard.png" width="160" alt="Leaderboard"/>
+  <img src="docs/screenshots/11-progress.png" width="160" alt="Progress and badges"/>
+  <img src="docs/screenshots/12-profile.png" width="160" alt="Profile"/>
 </p>
 
 ## Architecture
@@ -78,60 +86,69 @@ Most people quit training because sessions are long and form feedback is missing
 
 ```mermaid
 flowchart LR
-    A[Welcome] --> B[Onboarding<br/>10 steps]
-    B --> C{Paywall}
-    C -- "Start free trial" --> D[Main shell]
-    C -- "Monthly" --> E[Success]
+    A[Welcome] -- "Google sign-in" --> B{Profile?}
+    B -- "new user" --> C[Setup<br/>6 steps]
+    B -- "returning" --> D[Main shell]
+    C --> D
     D --- T1[Today]
-    D --- T2[Path]
-    D --- T3[Progress]
-    T1 & T2 -- "Start lesson" --> L[Learn]
+    D --- T2[Levels]
+    D --- T3[Leaderboard]
+    D --- T4[Progress]
+    T1 & T2 -- "Play" --> L[Workout intro]
     L --> K[Camera setup<br/>+ countdown]
-    K --> W[Tracked set]
-    W --> R[Results]
-    R --> S[Share]
-    R -- "Continue" --> D
+    K --> W[Exercise 1 … n]
+    W --> R[Results + rewards]
+    R -- "Next level / Continue" --> D
 ```
 
 ### Code layout
 
 ```
 lib/
-├── main.dart                     Entry point, bundled-font licences, portrait lock
-├── theme/app_theme.dart          Colour tokens, Baloo 2 / Nunito text styles, hard shadows
+├── main.dart                   Firebase init, fonts, portrait lock
+├── app_root.dart               Sign-in → setup → main app routing
+├── firebase_options.dart       Generated by FlutterFire (Android)
+├── theme/app_theme.dart        Colour tokens, Baloo 2 / Nunito text styles
 ├── widgets/
-│   ├── common.dart               Shared UI: ChunkyButton, FlowPage, SpeechBubble, StatTile …
-│   └── decor.dart                Painters and shapes: stripes, dashed outlines, teardrop, week strip
-├── onboarding/
-│   ├── onboarding_flow.dart      PageView flow, back handling, hand-off to the app
-│   ├── onboarding_controller.dart  Goals, minutes, level, quiz and plan selection
-│   └── screens/                  One widget per step (welcome → success)
+│   ├── common.dart             Buttons, cards, headers, speech bubbles
+│   ├── decor.dart              Painters and shapes (stripes, dashed outlines, week strip)
+│   └── exercise_demo.dart      Looping Lottie demo for each exercise
+├── game/
+│   ├── exercises.dart          The 6 exercises, their cues and form issues
+│   ├── levels.dart             The 20 levels, limitation adaptations, start levels
+│   └── progression.dart        Stars, XP, ranks, badges, drill recommendations
 ├── data/
-│   ├── models.dart               Profile, SessionResult, FormError (JSON-serialisable)
-│   └── progress_store.dart       On-device storage (shared_preferences)
+│   ├── models.dart             Profile, SessionResult, BlockResult (JSON)
+│   ├── auth.dart               Google sign-in through Firebase Auth
+│   └── repository.dart         Firestore: profile, sessions, leaderboard
 ├── tracking/
-│   ├── tracker.dart              SquatTracker: setup → countdown → workout lifecycle
-│   ├── camera_tracker.dart       Front camera + ML Kit pose detection
-│   ├── squat_analyzer.dart       Rep counting, depth and knee checks (pure Dart)
-│   ├── simulated_tracker.dart    Scripted demo set for devices without a camera
-│   └── pose.dart                 Joints, landmarks and skeleton edges
+│   ├── tracker.dart            Workout lifecycle: setup → countdown → blocks → done
+│   ├── camera_tracker.dart     Front camera + ML Kit pose detection
+│   ├── analyzers.dart          Per-exercise rep counting and form checks (pure Dart)
+│   ├── simulated_tracker.dart  Scripted demo set
+│   └── pose.dart               Joints and skeleton edges
+├── onboarding/                 Setup flow and its screens
 └── app/
-    ├── main_shell.dart           Today / Path / Progress tabs and lesson routing
-    ├── app_controller.dart       Streak, XP, path progress, today's session
-    ├── screens/                  Home, path, stats, learn, camera, results, share
-    └── widgets/rep_dots.dart     Rep-by-rep result bar
+    ├── main_shell.dart         Tabs and workout routing
+    ├── app_controller.dart     Streaks, XP, stars, unlocks, freezes, rewards
+    └── screens/                Today, levels, leaderboard, progress, profile, intro, camera, results, share
 ```
 
 ### Design decisions
 
-- **State:** each flow owns one `ChangeNotifier` (`OnboardingController`, `AppController`), and screens rebuild through `ListenableBuilder`. `AppController` derives streak, XP, the week strip and path progress from the stored sessions instead of keeping its own counters, so there is one source of truth.
-- **Pose tracking:** `CameraTracker` streams front-camera frames to ML Kit (stream mode, base model), dropping frames while the detector is busy so latency stays low. Landmarks are mapped into the upright, mirrored preview and drawn as a live skeleton.
-- **Squat analysis:** depth is the vertical hip-to-knee drop relative to shin length, calibrated to the user's standing pose. Unlike the 2D knee angle, this works whether the user faces the camera or stands side-on. A rep is flagged *shallow* if the hips never reach near knee height, and *knees in* if the knee gap collapses well below the ankle gap.
-- **Setup gate:** counting only starts once the whole body is in frame, landmarks are confident, and the hips have been still for about a second.
-- **Persistence and streaks:** the profile and every finished set are stored as JSON with `shared_preferences`. The streak counts consecutive training days and stays alive until midnight, so a missed day resets it. Returning users skip onboarding.
-- **Privacy:** camera frames are processed on the device and never stored or uploaded.
-- **Offline-first assets:** Baloo 2 and Nunito ship in `assets/google_fonts/` (with their OFL licences), and runtime font fetching is disabled. The app renders correctly with no network.
-- **Accessibility:** custom buttons and cards expose their own semantics nodes. Coaching cues are live regions, so screen readers announce them.
+- **One source of truth:** `AppController` derives streak, XP, stars, unlocks, badges and the week strip from stored sessions instead of keeping separate counters.
+- **Pose analysis:** each exercise has a pure-Dart analyzer working on 2D landmarks:
+  - **Squats:** measured by how far the hips drop toward knee height, calibrated to the standing pose, which works facing the camera or side-on.
+  - **Push-ups, lunges and bridges:** measured from joint angles.
+  - **Plank:** graded in 5-second segments.
+  - **Jumping jacks:** checked for full arm and leg range.
+  
+  The analyzers were validated on real Kaggle exercise videos (see `tool/video_eval`).
+- **Setup gate:** counting starts only when the body is in frame, landmarks are confident and the user is still. Side-on exercises need just one full side visible.
+- **Daily goal and streaks:** a day counts when active training time reaches the daily goal. Streak freezes (one per 500 XP, hold up to 2) cover a single missed day automatically.
+- **Leaderboard integrity:** on Firebase's free plan the app writes its own totals, so Firestore security rules check every write. Only you can write your row, XP never decreases, and one write can add at most one workout's XP.
+- **Offline-first:** Firestore's on-device cache keeps training working offline. Startup waits at most 4 seconds for the server before using cached data.
+- **Accessibility:** custom controls expose semantics, coaching cues are live regions, and animations show a still frame when the system's reduce-motion setting is on.
 
 ## Getting started
 
@@ -140,9 +157,8 @@ lib/
 | Tool | Version |
 | --- | --- |
 | Flutter | 3.47 (stable) |
-| Dart | 3.13 or newer |
-| JDK | 17 or newer (Android builds) |
-| Xcode | Latest stable (iOS builds) |
+| JDK | 17 or newer |
+| Android SDK | API 36 |
 
 ### Run
 
@@ -153,22 +169,23 @@ flutter pub get
 flutter run
 ```
 
+The app is configured for the existing Firebase project. To use your own, run `flutterfire configure --platforms=android`, add your signing key's SHA-1 to the Android app in Firebase, enable Google sign-in, and deploy the rules and indexes with `firebase deploy --only firestore`.
+
 ### Tracking tips
 
-Use a physical phone: emulator cameras rarely give a usable feed. Prop the phone at about hip height, 2–3 m away, so your whole body from shoulders to feet is in frame, and train in good light. Counting starts once the three setup checks turn green. If camera access is denied or no camera is found, the app offers a scripted demo set.
+Use a physical phone; emulator cameras rarely give a usable feed. Prop the phone at about hip height, 2–3 m away, so your whole body is in frame, and train in good light. Each workout intro shows whether to face the camera or turn side-on.
 
 ### Build
 
 ```bash
-flutter build apk --release              # universal APK
+flutter build apk --release                   # universal APK
 flutter build apk --release --split-per-abi   # smaller per-device APKs
-flutter build ios --release              # requires macOS + Xcode
 ```
 
-The APK is written to `build/app/outputs/flutter-apk/`. Every push to `main` also builds a release APK in CI, which you can download from the run's **Artifacts** section.
+The APK is written to `build/app/outputs/flutter-apk/`. CI also builds one on every push to `main`; download it from the run's **Artifacts** section.
 
 > [!IMPORTANT]
-> Release builds currently use Flutter's default debug signing. That works for sideloading, but you need a real upload key before publishing to Google Play.
+> Release builds currently use the debug signing key. That's fine for sideloading, but Google Play needs a real upload key, and that key's SHA-1 must also be added to Firebase for Google sign-in to work.
 
 ## Testing
 
@@ -180,31 +197,28 @@ flutter test
 
 | Suite | Covers |
 | --- | --- |
-| `squat_analyzer_test.dart` | Rep counting, shallow and knees-in detection, wobble rejection, setup checks |
-| `app_controller_test.dart` | Streaks by date (including resets and midnight grace), week strip, path progress, totals, persistence across restarts |
-| `widget_test.dart` | New users land on onboarding and can advance |
-| `app_flow_test.dart` | Paywall routing, returning users skipping onboarding, and a full saved lesson from Today through results to the updated home screen |
+| `analyzers_test.dart` | Rep counting and form checks for all 6 exercises, plus setup checks |
+| `app_controller_test.dart` | Stars, XP, ranks, levels, drills, daily-goal streaks, freezes, demo sets not saved, profile edits |
+| `app_flow_test.dart` | Sign-in, setup, a full level, leaderboard ranking, nickname edit, account deletion |
+| `exercise_demo_test.dart` | Every animation loads, swaps cleanly and respects reduced motion |
+| `firestore_config_test.dart` | Every leaderboard query has a deployed index; rules cover the app's collections |
 
-CI runs formatting, analysis and tests on every push and pull request, then builds the release APK.
+To re-run the real-video evaluation, extract poses with MediaPipe and run `POSES=<dir> flutter test tool/video_eval`.
 
 ## Roadmap
 
-- [x] On-device pose estimation with ML Kit
-- [x] Local persistence for profile, sessions and streaks
-- [ ] Tracking for more moves (hip hinge, push-up, lunge) so each lesson has its own exercise
-- [ ] Cloud sync
-- [ ] Account sign-in, including "I already have an account"
-- [ ] In-app purchases for the annual and monthly plans
+- [x] On-device pose tracking for 6 exercises
+- [x] Google sign-in, cloud sync and a global leaderboard
+- [x] 20 levels with stars, XP, ranks, badges and streaks
+- [ ] Voice coaching
 - [ ] Working share targets (Story, Message, Save)
-- [ ] Lesson video content and voice coaching
+- [ ] Server-validated leaderboard scores (Cloud Functions)
+- [ ] iOS build
 - [ ] Custom app icon and launch screen
 
-## Contributing
+## Credits
 
-1. Create a branch from `main`.
-2. Keep changes focused, and run the format, analyze and test commands above.
-3. Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`).
-4. Open a pull request. CI must pass before merging.
+Exercise animations from [LottieFiles](https://lottiefiles.com) under the Lottie Simple License; see [assets/exercises/CREDITS.md](assets/exercises/CREDITS.md).
 
 ## Author
 
