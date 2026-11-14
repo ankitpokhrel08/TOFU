@@ -9,7 +9,7 @@
 TOFU watches each rep through your phone's camera, coaches your form by voice in real time,<br/>
 and turns training into a game: 20 levels, stars, XP, streaks and a global leaderboard.
 
-[![CI](https://github.com/ankitpokhrel08/gym-guru/actions/workflows/ci.yml/badge.svg)](https://github.com/ankitpokhrel08/gym-guru/actions/workflows/ci.yml)
+[![CI](https://github.com/ankitpokhrel08/TOFU/actions/workflows/ci.yml/badge.svg)](https://github.com/ankitpokhrel08/TOFU/actions/workflows/ci.yml)
 ![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter&logoColor=white)
 ![Dart](https://img.shields.io/badge/Dart-3.13-0175C2?logo=dart&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore-FFCA28?logo=firebase&logoColor=black)
