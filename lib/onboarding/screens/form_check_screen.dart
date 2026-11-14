@@ -43,11 +43,15 @@ class _FormCheckScreenState extends State<FormCheckScreen> {
   @override
   Widget build(BuildContext context) {
     return FlowPage(
-      header: OnboardingHeader(step: 3, onBack: widget.nav.back),
+      header: OnboardingHeader(
+        step: widget.nav.step,
+        total: widget.nav.total,
+        onBack: widget.nav.back,
+      ),
       footer: ChunkyButton(label: 'Whoa, cool', onPressed: widget.nav.next),
       spacing: 12,
       children: [
-        if (widget.c.showAhaTags) const AhaTag('AHA #1 · AI FORM CHECK'),
+        const AhaTag('HOW GURU COACHES YOU'),
         Text('I see every rep. And every mistake.', style: baloo(30, height: 1.05)),
         _CameraCard(reps: _reps, bad: _bad),
         Text(

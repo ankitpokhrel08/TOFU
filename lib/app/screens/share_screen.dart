@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../game/levels.dart';
 import '../app_controller.dart';
 
 enum _CardKind { streak, form, skill }
@@ -19,10 +20,11 @@ class _CardStyle {
 
 /// Pick a stat card and share it.
 class ShareScreen extends StatefulWidget {
-  const ShareScreen({super.key, required this.result, required this.streak});
+  const ShareScreen({super.key, required this.app, required this.result, this.level});
 
+  final AppController app;
   final SessionResult result;
-  final int streak;
+  final GameLevel? level;
 
   @override
   State<ShareScreen> createState() => _ShareScreenState();
@@ -33,25 +35,29 @@ class _ShareScreenState extends State<ShareScreen> {
 
   _CardStyle get _style => switch (_kind) {
     _CardKind.streak => _CardStyle(
-      '${widget.streak}',
+      '${widget.app.streak}',
       'day streak',
-      widget.streak == 1 ? 'Day one, done' : 'Showing up, day after day',
+      widget.app.streak <= 1
+          ? 'Day one, done'
+          : '${widget.app.rank.title} rank · ${widget.app.xp} XP',
       AppColors.orange,
       Colors.white,
       'summit',
     ),
     _CardKind.form => _CardStyle(
-      '${widget.result.form}',
+      '${widget.result.form}%',
       'form score',
-      '${widget.result.reps} squats, AI-checked',
+      '${widget.result.reps} reps, AI-checked',
       AppColors.purple,
       Colors.white,
       'lift',
     ),
     _CardKind.skill => _CardStyle(
-      'Lvl ${widget.result.lesson}',
-      pathLessons[widget.result.lesson - 1].name,
-      'Skill practised today',
+      widget.level == null ? '+${widget.result.xp}' : 'Lvl ${widget.level!.number}',
+      widget.level == null ? 'XP earned' : widget.level!.title,
+      widget.level == null
+          ? 'Drill done'
+          : '${'★' * widget.result.stars}${'☆' * (3 - widget.result.stars)}',
       AppColors.lime,
       AppColors.ink,
       'cheer',
@@ -151,7 +157,7 @@ class _KindPicker extends StatelessWidget {
   static const _labels = {
     _CardKind.streak: 'Streak',
     _CardKind.form: 'Form score',
-    _CardKind.skill: 'Skill',
+    _CardKind.skill: 'Level',
   };
 
   @override

@@ -3,13 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../game/levels.dart';
 import '../../widgets/common.dart';
 import '../onboarding_controller.dart';
 
 const _steps = [
-  'Matching lessons to your goals',
-  'Calibrating pose tracking',
-  'Picking your first 7 skills',
+  'Matching drills to your goal',
+  'Picking your starting level',
+  'Setting your daily goal',
 ];
 
 class PlanReadyScreen extends StatefulWidget {
@@ -48,8 +49,12 @@ class _PlanReadyScreenState extends State<PlanReadyScreen> {
   Widget build(BuildContext context) {
     final c = widget.c;
     return FlowPage(
-      header: OnboardingHeader(step: 10, onBack: widget.nav.back),
-      footer: ChunkyButton(label: 'Unlock my plan', onPressed: _done ? widget.nav.next : null),
+      header: OnboardingHeader(
+        step: widget.nav.step,
+        total: widget.nav.total,
+        onBack: widget.nav.back,
+      ),
+      footer: ChunkyButton(label: "Let's train", onPressed: _done ? widget.nav.next : null),
       bodyPadding: const EdgeInsets.fromLTRB(22, 16, 22, 8),
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -73,7 +78,11 @@ class _PlanReadyScreenState extends State<PlanReadyScreen> {
             duration: const Duration(milliseconds: 500),
             curve: const Cubic(.2, .8, .2, 1),
             offset: _done ? Offset.zero : const Offset(0, .12),
-            child: _PlanCard(name: c.planName, minutes: c.minutes, level: c.level.short),
+            child: _PlanCard(
+              name: c.planName,
+              minutes: c.minutes,
+              startLevel: startLevelFor(c.level.name),
+            ),
           ),
         ),
       ],
@@ -116,11 +125,11 @@ class _BuildStep extends StatelessWidget {
 }
 
 class _PlanCard extends StatelessWidget {
-  const _PlanCard({required this.name, required this.minutes, required this.level});
+  const _PlanCard({required this.name, required this.minutes, required this.startLevel});
 
   final String name;
   final int minutes;
-  final String level;
+  final int startLevel;
 
   @override
   Widget build(BuildContext context) {
@@ -135,16 +144,16 @@ class _PlanCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Eyebrow('YOUR 30-DAY PLAN', color: AppColors.purpleMuted),
+          const Eyebrow('YOUR PLAN', color: AppColors.purpleMuted),
           const SizedBox(height: 2),
           Text(name, style: baloo(24, height: 1.1, color: Colors.white)),
           const SizedBox(height: 12),
           Row(
             spacing: 8,
             children: [
-              _Stat(value: '$minutes min', label: 'per day'),
-              _Stat(value: level, label: 'level'),
-              const _Stat(value: '30', label: 'skills'),
+              _Stat(value: '$minutes min', label: 'daily goal'),
+              _Stat(value: 'Lvl $startLevel', label: 'start'),
+              _Stat(value: '${gameLevels.length}', label: 'levels'),
             ],
           ),
         ],

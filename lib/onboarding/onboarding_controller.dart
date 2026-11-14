@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/models.dart';
+import '../game/exercises.dart';
 
 class Goal {
   const Goal(this.id, this.title, this.subtitle, this.planName);
@@ -27,15 +28,16 @@ enum Level {
   final String short;
 }
 
-enum Plan { annual, monthly }
-
 const goals = [
-  Goal('strength', 'Build strength', 'Lift more with clean form', 'Strength Foundations'),
+  Goal('strength', 'Build strength', 'More push-ups, stronger legs', 'Strength Foundations'),
   Goal('fat', 'Lose fat', 'Efficient sessions that burn', 'Lean & Strong'),
   Goal('posture', 'Fix my posture', 'Undo the desk-day damage', 'Posture Reset'),
-  Goal('pain', 'Move without pain', 'Mobility for knees, hips, back', 'Pain-Free Movement'),
+  Goal('pain', 'Move without pain', 'Gentle strength for hips and back', 'Pain-Free Movement'),
   Goal('habit', 'Stay consistent', 'Finally make it stick', 'Daily Habit Builder'),
 ];
+
+String planNameFor(String goal) =>
+    goals.firstWhere((g) => g.id == goal, orElse: () => goals.first).planName;
 
 const timeOptions = [
   TimeOption(3, 'Quick spark'),
@@ -44,44 +46,45 @@ const timeOptions = [
   TimeOption(15, 'Beast mode'),
 ];
 
-const quizCorrect = 'B';
-
-/// Answers collected across the onboarding flow.
+/// Setup answers. Only what the app uses.
 class OnboardingController extends ChangeNotifier {
-  OnboardingController({this.showAhaTags = true, this.showTrialTimeline = true});
+  OnboardingController({String name = ''}) : _name = name.trim(), _nickname = name.trim();
 
-  /// Shows the "AHA #n" labels on the three key value-prop screens.
-  final bool showAhaTags;
-
-  /// Shows the trial timeline under the annual plan on the paywall.
-  final bool showTrialTimeline;
-
-  final List<String> _goals = ['strength', 'posture'];
+  String _name;
+  String _nickname;
+  String _goal = 'strength';
   int _minutes = 5;
   Level _level = Level.beginner;
-  String? _quizAnswer;
-  Plan _plan = Plan.annual;
+  final Set<Limitation> _limits = {};
 
-  List<String> get selectedGoals => List.unmodifiable(_goals);
+  String get name => _name;
+  String get nickname => _nickname;
+  String get goal => _goal;
   int get minutes => _minutes;
   Level get level => _level;
-  String? get quizAnswer => _quizAnswer;
-  Plan get plan => _plan;
+  Set<Limitation> get limitations => Set.unmodifiable(_limits);
 
-  bool get hasGoals => _goals.isNotEmpty;
-  bool get quizAnswered => _quizAnswer != null;
-  bool get quizCorrectAnswer => _quizAnswer == quizCorrect;
+  String get planName => planNameFor(_goal);
 
-  /// Named after the first goal the user picked.
-  String get planName {
-    if (_goals.isEmpty) return goals.first.planName;
-    return goals.firstWhere((g) => g.id == _goals.first).planName;
+  static bool validNickname(String s) =>
+      s.trim().length >= 2 && s.trim().length <= 20 && RegExp(r"^[\w .'-]+$").hasMatch(s.trim());
+
+  bool get namesValid => _name.isNotEmpty && validNickname(_nickname);
+
+  void setName(String v) {
+    // Keep the nickname following the name until the user edits it.
+    if (_nickname == _name) _nickname = v.trim();
+    _name = v.trim();
+    notifyListeners();
   }
 
-  bool isGoalSelected(String id) => _goals.contains(id);
+  void setNickname(String v) {
+    _nickname = v.trim();
+    notifyListeners();
+  }
 
-  void toggleGoal(String id) {
-    _goals.contains(id) ? _goals.remove(id) : _goals.add(id);
+  void setGoal(String id) {
+    _goal = id;
     notifyListeners();
   }
 
@@ -95,34 +98,34 @@ class OnboardingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void answerQuiz(String key) {
-    if (_quizAnswer != null) return;
-    _quizAnswer = key;
+  void toggleLimitation(Limitation l) {
+    _limits.contains(l) ? _limits.remove(l) : _limits.add(l);
     notifyListeners();
   }
 
-  void setPlan(Plan v) {
-    _plan = v;
+  void clearLimitations() {
+    _limits.clear();
     notifyListeners();
   }
 
-  /// Answers to keep once onboarding is finished.
   Profile toProfile(DateTime now) => Profile(
-    goals: selectedGoals,
-    planName: planName,
+    name: _name,
+    nickname: _nickname,
+    goal: _goal,
+    experience: _level.name,
     minutes: _minutes,
-    levelShort: _level.short,
-    plan: _plan.name,
+    limitations: Set.of(_limits),
     createdAt: now,
   );
 }
 
-/// Navigation callbacks handed to each screen.
+/// Navigation callbacks handed to each setup screen.
 class FlowNav {
-  const FlowNav({required this.next, required this.back, required this.enterApp});
+  const FlowNav({required this.next, required this.back, required this.step, required this.total});
   final VoidCallback next;
   final VoidCallback back;
 
-  /// Saves the answers and leaves onboarding for the main app.
-  final VoidCallback enterApp;
+  /// 1-based step, for the progress header.
+  final int step;
+  final int total;
 }

@@ -15,14 +15,14 @@ class GoalsScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: c,
       builder: (context, _) => FlowPage(
-        header: OnboardingHeader(step: 2, onBack: nav.back),
-        footer: ChunkyButton(label: 'Continue', onPressed: c.hasGoals ? nav.next : null),
+        header: OnboardingHeader(step: nav.step, total: nav.total, onBack: nav.back),
+        footer: ChunkyButton(label: 'Continue', onPressed: nav.next),
         children: [
-          const SpeechBubble(
+          SpeechBubble(
             image: 'assets/mascot/cheer.png',
             imageWidth: 92,
             bubbleLift: 18,
-            text: "Hey, I'm Guru! Let's build your plan together.",
+            text: 'Nice to meet you, ${c.name}! What brings you here?',
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -30,7 +30,7 @@ class GoalsScreen extends StatelessWidget {
               Text('What should we work on?', style: baloo(28, height: 1.1)),
               const SizedBox(height: 4),
               Text(
-                'Pick all that apply.',
+                'Pick your main goal. It shapes your bonus drills.',
                 style: nunito(15, weight: FontWeight.w600, color: AppColors.textMuted),
               ),
             ],
@@ -39,11 +39,7 @@ class GoalsScreen extends StatelessWidget {
             spacing: 10,
             children: [
               for (final g in goals)
-                _GoalTile(
-                  goal: g,
-                  selected: c.isGoalSelected(g.id),
-                  onTap: () => c.toggleGoal(g.id),
-                ),
+                _GoalTile(goal: g, selected: c.goal == g.id, onTap: () => c.setGoal(g.id)),
             ],
           ),
         ],
@@ -87,7 +83,7 @@ class _GoalTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected ? AppColors.pink : Colors.white,
               border: Border.all(color: bd, width: 2),
-              borderRadius: BorderRadius.circular(8),
+              shape: BoxShape.circle,
             ),
             child: selected ? const Icon(Icons.check_rounded, size: 17, color: Colors.white) : null,
           ),

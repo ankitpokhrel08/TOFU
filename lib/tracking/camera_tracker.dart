@@ -5,8 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
+import '../game/exercises.dart';
+import 'analyzers.dart';
 import 'pose.dart';
-import 'squat_analyzer.dart';
 import 'tracker.dart';
 
 const _jointMap = {
@@ -25,14 +26,18 @@ const _jointMap = {
   Joint.rightAnkle: PoseLandmarkType.rightAnkle,
 };
 
-/// Live squat tracking on the front camera with on-device ML Kit pose
+/// Live workout tracking on the front camera with on-device ML Kit pose
 /// detection. Frames never leave the device.
-class CameraTracker extends SquatTracker {
+class CameraTracker extends WorkoutTracker {
+  CameraTracker(super.blocks, [Set<Limitation> limits = const {}])
+    : _setupChecker = SetupChecker(view: blocks.first.exercise.trackingView),
+      super(limits: limits);
+
   final _detector = PoseDetector(
     options: PoseDetectorOptions(model: PoseDetectionModel.base, mode: PoseDetectionMode.stream),
   );
-  final _setupChecker = SetupChecker();
-  final _analyzer = SquatAnalyzer();
+  final SetupChecker _setupChecker;
+  late ExerciseAnalyzer _analyzer = analyzerFor(blocks.first.exercise, limits);
 
   CameraController? _controller;
   bool _busy = false;
@@ -48,7 +53,7 @@ class CameraTracker extends SquatTracker {
     return CameraPreview(c);
   }
 
-  /// Upright preview size (portrait), for laying out the preview and overlay.
+  @override
   Size? get previewSize {
     final s = _controller?.value.previewSize;
     return s == null ? null : Size(s.shortestSide, s.longestSide);
@@ -92,7 +97,7 @@ class CameraTracker extends SquatTracker {
   }
 
   @override
-  void onWorkoutStart() => _analyzer.reset();
+  void onBlockStart() => _analyzer = analyzerFor(block.exercise, limits);
 
   Future<void> _onFrame(CameraImage image) async {
     // Drop frames while the detector is busy so latency stays low.
@@ -114,19 +119,20 @@ class CameraTracker extends SquatTracker {
   void _handle(PoseSnapshot? pose) {
     switch (phase) {
       case TrackerPhase.setup:
-        reportLive(depth: 0, pose: pose, bodyVisible: pose != null);
+        reportLive(progress: 0, pose: pose, bodyVisible: pose != null);
         reportChecks(_setupChecker.update(pose));
-      case TrackerPhase.countdown:
-        reportLive(depth: 0, pose: pose, bodyVisible: pose != null);
+      case TrackerPhase.countdown || TrackerPhase.transition:
+        reportLive(progress: 0, pose: pose, bodyVisible: pose != null);
       case TrackerPhase.workout:
-        final visible = pose != null && SetupChecker.bodyInFrame(pose);
+        final visible = pose != null && SetupChecker.bodyInFrame(pose, block.exercise.trackingView);
         RepEvent? rep;
-        if (visible) rep = _analyzer.update(pose);
+        if (visible) rep = _analyzer.update(pose, elapsed);
         reportLive(
-          depth: _analyzer.depth,
+          progress: _analyzer.progress,
           issue: visible ? _analyzer.liveIssue : null,
           pose: pose,
           bodyVisible: visible,
+          inPosition: !visible || _analyzer.inPosition,
         );
         if (rep != null) reportRep(rep.issue);
       default:

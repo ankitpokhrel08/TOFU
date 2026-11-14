@@ -3,13 +3,21 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
-import '../app_controller.dart';
 
-/// One segment per target rep: lime = clean, red = form error.
+/// One segment per graded unit: lime = clean, red = form error.
 class RepDots extends StatelessWidget {
-  const RepDots({super.key, required this.repLog, required this.height, required this.empty});
+  const RepDots({
+    super.key,
+    required this.repLog,
+    required this.total,
+    required this.height,
+    required this.empty,
+  });
 
   final List<bool> repLog;
+
+  /// Segments to draw (reps, or hold segments).
+  final int total;
   final double height;
   final Color empty;
 
@@ -18,7 +26,7 @@ class RepDots extends StatelessWidget {
     return Row(
       spacing: 4,
       children: [
-        for (var i = 0; i < repTarget; i++)
+        for (var i = 0; i < total; i++)
           Expanded(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),

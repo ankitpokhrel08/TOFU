@@ -1,51 +1,71 @@
 import 'package:flutter/material.dart';
 
+import '../../game/exercises.dart';
+import '../../game/levels.dart';
 import '../../theme/app_theme.dart';
 import '../../tracking/tracker.dart';
 import '../../widgets/common.dart';
-import '../../widgets/decor.dart';
+import '../../widgets/exercise_demo.dart';
 import '../app_controller.dart';
 import 'camera_screen.dart';
 
-const _cues = [
-  ('Hips to knee height', 'Thighs parallel to the floor', Color(0xFFFFE0EF), Color(0xFFE0217F)),
-  ('Knees track over toes', 'No caving inward', AppColors.purpleTint, AppColors.purple),
-  ('Chest proud', 'Keep your torso tall', Color(0xFFE3F7EE), Color(0xFF0F8A63)),
+const _tints = [
+  (Color(0xFFFFE0EF), Color(0xFFE0217F)),
+  (AppColors.purpleTint, AppColors.purple),
+  (Color(0xFFE3F7EE), Color(0xFF0F8A63)),
+  (Color(0xFFFFE9D6), Color(0xFFE26F0A)),
+  (Color(0xFFEEF4FF), Color(0xFF3B7BD8)),
 ];
 
-/// Lesson step 1: watch the move and learn the cues.
+/// Workout intro: the exercises, how to stand, and what Guru checks.
 class LearnScreen extends StatelessWidget {
-  const LearnScreen({super.key, required this.app, required this.trackerFactory});
+  const LearnScreen({
+    super.key,
+    required this.app,
+    required this.trackerFactory,
+    required this.kind,
+    required this.title,
+    required this.blocks,
+    this.level,
+  });
 
   final AppController app;
   final TrackerFactory trackerFactory;
+  final SessionKind kind;
+  final String title;
+  final List<Block> blocks;
+  final GameLevel? level;
 
   @override
   Widget build(BuildContext context) {
-    final lesson = app.todaysLesson;
+    final l = level;
+    final stars = l == null ? 0 : app.levelStars[l.number] ?? 0;
     return Scaffold(
       body: FlowPage(
         header: Padding(
           padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
           child: Row(
-            spacing: 12,
             children: [
               SquareIconButton(
                 icon: Icons.close_rounded,
-                label: 'Close lesson',
+                label: 'Close',
                 onTap: () => Navigator.of(context).pop(),
               ),
-              const Expanded(child: LessonSteps(current: 0)),
-              Text('1 · Learn', style: nunito(13, color: AppColors.textFaint)),
             ],
           ),
         ),
-        bodyPadding: const EdgeInsets.fromLTRB(22, 16, 22, 8),
+        bodyPadding: const EdgeInsets.fromLTRB(22, 12, 22, 8),
         footer: ChunkyButton(
-          label: 'Got it, open camera',
-          onPressed: () => Navigator.of(context).push(
+          label: 'Start workout',
+          onPressed: () => Navigator.of(context).pushReplacement(
             MaterialPageRoute<void>(
-              builder: (_) => CameraScreen(app: app, trackerFactory: trackerFactory),
+              builder: (_) => CameraScreen(
+                app: app,
+                trackerFactory: trackerFactory,
+                kind: kind,
+                level: level,
+                blocks: blocks,
+              ),
             ),
           ),
         ),
@@ -53,128 +73,102 @@ class LearnScreen extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Eyebrow('LESSON ${lesson.number} · 1 MIN', color: AppColors.pink),
+              Eyebrow(
+                l == null
+                    ? 'DRILL'
+                    : '${l.boss ? 'BOSS · ' : ''}LEVEL ${l.number} · ${unitNames[l.unit - 1].toUpperCase()}',
+                color: AppColors.pink,
+              ),
               const SizedBox(height: 2),
-              Text(lesson.name, style: baloo(30, height: 1.05)),
+              Text(title, style: baloo(30, height: 1.05)),
               const SizedBox(height: 4),
               Text(
-                'Tracked move: $repTarget bodyweight squats',
-                style: nunito(14, weight: FontWeight.w700, color: AppColors.textMuted),
+                l == null
+                    ? 'A quick set to sharpen your form. Earns XP and daily goal minutes.'
+                    : stars == 0
+                    ? 'Finish every exercise with ${l.passForm}% form to pass and unlock the next level.'
+                    : 'Best so far: $stars★. 92% form earns three stars.',
+                style: nunito(14, weight: FontWeight.w600, color: AppColors.textMuted),
               ),
             ],
           ),
-          const _VideoPlaceholder(),
-          Text('3 cues Guru will check live', style: nunito(17)),
-          for (final (i, (title, detail, bg, fg)) in _cues.indexed)
-            OutlinedCard(
-              radius: 18,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                spacing: 12,
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-                    child: Text(
-                      '${i + 1}',
-                      style: nunito(15, weight: FontWeight.w900, color: fg),
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: nunito(15)),
-                        Text(
-                          detail,
-                          style: nunito(13, weight: FontWeight.w600, color: AppColors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          for (final (i, b) in blocks.indexed) _BlockCard(index: i, block: b),
+          Text(
+            'Prop your phone about 2–3 m away at hip height.'
+            '${blocks.length > 1 ? ' Guru switches exercises for you and gives you time to turn.' : ''}',
+            style: nunito(13, weight: FontWeight.w600, color: AppColors.textMuted),
+          ),
         ],
       ),
     );
   }
 }
 
-/// Three-segment lesson progress (learn → practice → check).
-class LessonSteps extends StatelessWidget {
-  const LessonSteps({super.key, required this.current});
+class _BlockCard extends StatelessWidget {
+  const _BlockCard({required this.index, required this.block});
 
-  final int current;
+  final int index;
+  final Block block;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      spacing: 6,
-      children: [
-        for (var i = 0; i < 3; i++)
-          Expanded(
-            child: Container(
-              height: 10,
-              decoration: BoxDecoration(
-                color: i <= current ? AppColors.pink : AppColors.track,
-                borderRadius: BorderRadius.circular(99),
-              ),
+    final e = block.exercise;
+    final (bg, fg) = _tints[index % _tints.length];
+    return OutlinedCard(
+      radius: 18,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: AppColors.lavender,
+              borderRadius: BorderRadius.circular(14),
             ),
+            child: ExerciseDemo(exercise: e, height: 170),
           ),
-      ],
-    );
-  }
-}
-
-/// Demo-video stand-in until real lesson media exists.
-class _VideoPlaceholder extends StatelessWidget {
-  const _VideoPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: SizedBox(
-        height: 200,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            const Positioned.fill(
-              child: CustomPaint(
-                painter: StripePainter(base: Color(0xFFEADCF2), stripe: Color(0x0D2B0F3F)),
-              ),
-            ),
-            Semantics(
-              button: true,
-              label: 'Play demo video',
-              child: Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: hardShadow(const Color(0xFFD2BEDD), 4),
+          Row(
+            spacing: 12,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+                child: Text(
+                  '${index + 1}',
+                  style: nunito(15, weight: FontWeight.w900, color: fg),
                 ),
-                child: const Icon(Icons.play_arrow_rounded, color: AppColors.pink, size: 40),
+              ),
+              Expanded(child: Text(block.label, style: nunito(16))),
+              Icon(
+                e.view == CameraView.front
+                    ? Icons.accessibility_new_rounded
+                    : Icons.switch_left_rounded,
+                size: 18,
+                color: AppColors.textFaint,
+              ),
+              Text(
+                e.view == CameraView.front ? 'Face camera' : 'Side-on',
+                style: nunito(12, color: AppColors.textFaint),
+              ),
+            ],
+          ),
+          for (final (cue, detail) in e.cues)
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: '$cue  ', style: nunito(13)),
+                  TextSpan(
+                    text: detail,
+                    style: nunito(13, weight: FontWeight.w600, color: AppColors.textMuted),
+                  ),
+                ],
               ),
             ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text('0:42', style: nunito(12)),
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

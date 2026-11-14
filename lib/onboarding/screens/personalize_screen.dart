@@ -15,13 +15,13 @@ class PersonalizeScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: c,
       builder: (context, _) => FlowPage(
-        header: OnboardingHeader(step: 6, onBack: nav.back),
+        header: OnboardingHeader(step: nav.step, total: nav.total, onBack: nav.back),
         footer: ChunkyButton(label: 'Continue', onPressed: nav.next),
         children: [
           const SpeechBubble(
             image: 'assets/mascot/water.png',
             imageWidth: 84,
-            text: 'Even 3 minutes counts. Seriously.',
+            text: 'Even 3 minutes counts. Hit your daily goal to grow your streak.',
           ),
           Text('How much time can you give me daily?', style: baloo(28, height: 1.08)),
           Column(
@@ -45,7 +45,7 @@ class PersonalizeScreen extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text('Your experience', style: nunito(17)),
+            child: Text('Your experience (sets your starting level)', style: nunito(17)),
           ),
           _LevelPicker(value: c.level, onChanged: c.setLevel),
         ],

@@ -3,52 +3,63 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../data/progress_store.dart';
+import '../data/auth.dart';
+import '../game/levels.dart';
+import '../game/progression.dart';
 import '../theme/app_theme.dart';
-import '../tracking/camera_tracker.dart';
 import '../tracking/tracker.dart';
 import 'app_controller.dart';
 import 'screens/home_screen.dart';
+import 'screens/leaderboard_screen.dart';
 import 'screens/learn_screen.dart';
-import 'screens/path_screen.dart';
+import 'screens/levels_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/stats_screen.dart';
 
-/// Main app: Today / Path / Progress tabs.
+/// Main app: Today / Levels / Ranks / Progress tabs.
 class MainShell extends StatefulWidget {
-  const MainShell({
-    super.key,
-    required this.store,
-    this.trackerFactory = CameraTracker.new,
-    this.clock,
-  });
+  const MainShell({super.key, required this.app, required this.auth, required this.trackerFactory});
 
-  final ProgressStore store;
+  final AppController app;
+  final AuthService auth;
 
-  /// Tracker used for each set. Defaults to the real camera.
+  /// Tracker used for each workout. The real camera in the app.
   final TrackerFactory trackerFactory;
-
-  /// Override "now" in tests.
-  final DateTime Function()? clock;
 
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
 class _MainShellState extends State<MainShell> {
-  late final _controller = AppController(widget.store, clock: widget.clock);
   int _tab = 0;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  AppController get _app => widget.app;
 
-  void _openLesson() => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => LearnScreen(app: _controller, trackerFactory: widget.trackerFactory),
+  void _push(Widget screen) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+
+  void _playLevel(GameLevel level) => _push(
+    LearnScreen(
+      app: _app,
+      trackerFactory: widget.trackerFactory,
+      kind: SessionKind.level,
+      level: level,
+      title: level.title,
+      blocks: _app.blocksFor(level),
     ),
   );
+
+  void _playDrill(Drill drill) => _push(
+    LearnScreen(
+      app: _app,
+      trackerFactory: widget.trackerFactory,
+      kind: SessionKind.drill,
+      title: drill.title,
+      blocks: [drill.block],
+    ),
+  );
+
+  void _openProfile() => _push(ProfileScreen(app: _app, auth: widget.auth));
 
   @override
   Widget build(BuildContext context) {
@@ -58,13 +69,19 @@ class _MainShellState extends State<MainShell> {
         body: SafeArea(
           bottom: false,
           child: ListenableBuilder(
-            listenable: _controller,
+            listenable: _app,
             builder: (context, _) => IndexedStack(
               index: _tab,
               children: [
-                HomeScreen(app: _controller, onStartLesson: _openLesson),
-                PathScreen(app: _controller, onStartLesson: _openLesson),
-                StatsScreen(app: _controller),
+                HomeScreen(
+                  app: _app,
+                  onPlayLevel: _playLevel,
+                  onPlayDrill: _playDrill,
+                  onOpenProfile: _openProfile,
+                ),
+                LevelsScreen(app: _app, onPlay: _playLevel),
+                LeaderboardScreen(app: _app, visible: _tab == 2),
+                StatsScreen(app: _app),
               ],
             ),
           ),
@@ -83,7 +100,8 @@ class _TabBar extends StatelessWidget {
 
   static const _tabs = [
     ('Today', BoxShape.circle, 0.0, 0.0),
-    ('Path', BoxShape.rectangle, 6.0, math.pi / 4),
+    ('Levels', BoxShape.rectangle, 6.0, math.pi / 4),
+    ('Ranks', BoxShape.rectangle, 2.0, math.pi / 4 / 3),
     ('Progress', BoxShape.rectangle, 4.0, 0.0),
   ];
 
@@ -99,47 +117,48 @@ class _TabBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               for (final (i, (label, shape, radius, angle)) in _tabs.indexed)
-                Semantics(
-                  container: true,
-                  button: true,
-                  selected: i == index,
-                  label: label,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onSelect(i),
-                    child: ExcludeSemantics(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          spacing: 5,
-                          children: [
-                            Transform.rotate(
-                              angle: angle,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  color: i == index ? AppColors.pink : AppColors.textGhost,
-                                  shape: shape,
-                                  borderRadius: shape == BoxShape.circle
-                                      ? null
-                                      : BorderRadius.circular(radius),
+                Expanded(
+                  child: Semantics(
+                    container: true,
+                    button: true,
+                    selected: i == index,
+                    label: label,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onSelect(i),
+                      child: ExcludeSemantics(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            spacing: 5,
+                            children: [
+                              Transform.rotate(
+                                angle: angle,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: i == index ? AppColors.pink : AppColors.textGhost,
+                                    shape: shape,
+                                    borderRadius: shape == BoxShape.circle
+                                        ? null
+                                        : BorderRadius.circular(radius),
+                                  ),
                                 ),
                               ),
-                            ),
-                            Text(
-                              label,
-                              style: nunito(
-                                12,
-                                color: i == index ? AppColors.pink : AppColors.textGhost,
+                              Text(
+                                label,
+                                style: nunito(
+                                  12,
+                                  color: i == index ? AppColors.pink : AppColors.textGhost,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),

@@ -1,12 +1,16 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'app/main_shell.dart';
-import 'data/progress_store.dart';
-import 'onboarding/onboarding_flow.dart';
+import 'app_root.dart';
+import 'data/auth.dart';
+import 'data/repository.dart';
+import 'firebase_options.dart';
 import 'theme/app_theme.dart';
+import 'tracking/camera_tracker.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,14 +23,26 @@ Future<void> main() async {
     }
   });
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  final store = await ProgressStore.open();
-  runApp(GymGuruApp(store: store));
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Cache data on the device so training works offline and syncs later.
+  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+
+  runApp(
+    GymGuruApp(
+      root: AppRoot(
+        auth: FirebaseAuthService(),
+        repositoryFor: FirestoreRepository.new,
+        trackerFactory: CameraTracker.new,
+      ),
+    ),
+  );
 }
 
 class GymGuruApp extends StatelessWidget {
-  const GymGuruApp({super.key, required this.store});
+  const GymGuruApp({super.key, required this.root});
 
-  final ProgressStore store;
+  final Widget root;
 
   @override
   Widget build(BuildContext context) {
@@ -34,11 +50,7 @@ class GymGuruApp extends StatelessWidget {
       title: 'Gym Guru',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
-      // Returning users skip straight to the app.
-      home: AnnotatedRegion(
-        value: SystemUiOverlayStyle.dark,
-        child: store.profile == null ? OnboardingFlow(store: store) : MainShell(store: store),
-      ),
+      home: AnnotatedRegion(value: SystemUiOverlayStyle.dark, child: root),
     );
   }
 }

@@ -1,29 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../app/main_shell.dart';
-import '../data/progress_store.dart';
-import '../tracking/camera_tracker.dart';
-import '../tracking/tracker.dart';
+import '../data/models.dart';
 import 'onboarding_controller.dart';
 import 'screens/form_check_screen.dart';
 import 'screens/goals_screen.dart';
-import 'screens/lessons_screen.dart';
-import 'screens/paywall_screen.dart';
+import 'screens/limitations_screen.dart';
+import 'screens/name_screen.dart';
 import 'screens/personalize_screen.dart';
 import 'screens/plan_ready_screen.dart';
-import 'screens/progress_screen.dart';
-import 'screens/quiz_screen.dart';
-import 'screens/skill_path_screen.dart';
-import 'screens/streak_screen.dart';
-import 'screens/success_screen.dart';
-import 'screens/welcome_screen.dart';
 
-/// Welcome → 10-step onboarding → paywall → success → main app.
+/// Profile setup after sign-in: name → goal → time & experience →
+/// limitations → form-check demo → plan ready.
 class OnboardingFlow extends StatefulWidget {
-  const OnboardingFlow({super.key, required this.store, this.trackerFactory = CameraTracker.new});
+  const OnboardingFlow({super.key, required this.initialName, required this.onDone, this.onExit});
 
-  final ProgressStore store;
-  final TrackerFactory trackerFactory;
+  /// Prefill from the Google account.
+  final String initialName;
+
+  /// Saves the profile and enters the app.
+  final Future<void> Function(Profile profile) onDone;
+
+  /// Back from the first step (signs out).
+  final VoidCallback? onExit;
 
   @override
   State<OnboardingFlow> createState() => _OnboardingFlowState();
@@ -31,40 +29,32 @@ class OnboardingFlow extends StatefulWidget {
 
 class _OnboardingFlowState extends State<OnboardingFlow> {
   static const _curve = Cubic(0.2, 0.8, 0.2, 1);
-  static const _count = 12;
+  static const _count = 6;
 
   final _pages = PageController();
-  final _controller = OnboardingController();
+  late final _controller = OnboardingController(name: widget.initialName);
   int _index = 0;
-
-  late final _nav = FlowNav(
-    next: () => _go(_index + 1),
-    back: () => _go(_index - 1),
-    enterApp: _enterApp,
-  );
-
-  bool _leaving = false;
-
-  Future<void> _enterApp() async {
-    if (_leaving) return;
-    _leaving = true;
-    await widget.store.saveProfile(_controller.toProfile(DateTime.now()));
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder<void>(
-        transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (_, _, _) =>
-            MainShell(store: widget.store, trackerFactory: widget.trackerFactory),
-        transitionsBuilder: (_, a, _, child) => FadeTransition(opacity: a, child: child),
-      ),
-    );
-  }
+  bool _saving = false;
 
   void _go(int i) {
-    final target = i.clamp(0, _count - 1);
-    if (target == _index) return;
-    setState(() => _index = target);
-    _pages.animateToPage(target, duration: const Duration(milliseconds: 500), curve: _curve);
+    if (i < 0) return widget.onExit?.call();
+    if (i >= _count) {
+      _finish();
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() => _index = i);
+    _pages.animateToPage(i, duration: const Duration(milliseconds: 500), curve: _curve);
+  }
+
+  Future<void> _finish() async {
+    if (_saving) return;
+    _saving = true;
+    try {
+      await widget.onDone(_controller.toProfile(DateTime.now()));
+    } finally {
+      _saving = false;
+    }
   }
 
   @override
@@ -74,25 +64,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     super.dispose();
   }
 
-  Widget _screen(int i) => switch (i) {
-    0 => WelcomeScreen(nav: _nav),
-    1 => GoalsScreen(nav: _nav, c: _controller),
-    2 => FormCheckScreen(nav: _nav, c: _controller),
-    3 => LessonsScreen(nav: _nav, c: _controller),
-    4 => SkillPathScreen(nav: _nav),
-    5 => PersonalizeScreen(nav: _nav, c: _controller),
-    6 => QuizScreen(nav: _nav, c: _controller),
-    7 => StreakScreen(nav: _nav),
-    8 => ProgressScreen(nav: _nav),
-    9 => PlanReadyScreen(nav: _nav, c: _controller),
-    10 => PaywallScreen(nav: _nav, c: _controller),
-    _ => SuccessScreen(nav: _nav),
-  };
+  Widget _screen(int i) {
+    final nav = FlowNav(next: () => _go(i + 1), back: () => _go(i - 1), step: i + 1, total: _count);
+    final c = _controller;
+    return switch (i) {
+      0 => NameScreen(nav: nav, c: c),
+      1 => GoalsScreen(nav: nav, c: c),
+      2 => PersonalizeScreen(nav: nav, c: c),
+      3 => LimitationsScreen(nav: nav, c: c),
+      4 => FormCheckScreen(nav: nav, c: c),
+      _ => PlanReadyScreen(nav: nav, c: c),
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: _index == 0,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _go(_index - 1);
       },

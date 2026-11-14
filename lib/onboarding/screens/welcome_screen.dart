@@ -3,18 +3,23 @@ import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
-import '../onboarding_controller.dart';
 
+/// First screen: pitch plus Google sign-in.
 class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({super.key, required this.nav});
+  const WelcomeScreen({super.key, required this.onSignIn, this.busy = false, this.error});
 
-  final FlowNav nav;
+  final VoidCallback onSignIn;
+
+  /// Sign-in in progress.
+  final bool busy;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
-      child: ColoredBox(
+      // Material, not ColoredBox: this screen isn't inside a Scaffold.
+      child: Material(
         color: AppColors.ink,
         child: SafeArea(
           child: Column(
@@ -72,9 +77,27 @@ class WelcomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(22, 12, 22, 12),
                 child: Column(
                   children: [
-                    ChunkyButton(label: "Let's get started", fontSize: 20, onPressed: nav.next),
-                    const SizedBox(height: 5),
-                    const GhostButton(label: 'I already have an account'),
+                    if (error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          error!,
+                          textAlign: TextAlign.center,
+                          style: nunito(14, color: AppColors.pinkSoft),
+                        ),
+                      ),
+                    ChunkyButton(
+                      label: busy ? 'Signing in…' : 'Continue with Google',
+                      fontSize: 20,
+                      onPressed: busy ? null : onSignIn,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Your account saves progress and puts you on the leaderboard.',
+                      textAlign: TextAlign.center,
+                      style: nunito(13, weight: FontWeight.w600, color: AppColors.textOnDark),
+                    ),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),

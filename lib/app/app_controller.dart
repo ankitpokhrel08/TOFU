@@ -3,67 +3,85 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../data/models.dart';
-import '../data/progress_store.dart';
+import '../data/repository.dart';
+import '../game/exercises.dart';
+import '../game/levels.dart';
+import '../game/progression.dart';
 
 export '../data/models.dart';
 
-class Lesson {
-  const Lesson(this.number, this.name);
-  final int number;
-  final String name;
+/// What changed after a workout, for the results screen.
+class WorkoutOutcome {
+  const WorkoutOutcome({
+    required this.session,
+    this.firstClear = false,
+    this.unlocked,
+    this.rankUp,
+    this.newBadges = const {},
+    this.goalJustMet = false,
+    this.demo = false,
+  });
+
+  final SessionResult session;
+
+  /// A scripted demo set: shown, never saved or rewarded.
+  final bool demo;
+  final bool firstClear;
+
+  /// Level newly unlocked by this result.
+  final GameLevel? unlocked;
+  final Rank? rankUp;
+  final Set<Achievement> newBadges;
+
+  /// This workout completed today's daily goal.
+  final bool goalJustMet;
 }
 
-const pathLessons = [
-  Lesson(1, 'Hip hinge'),
-  Lesson(2, 'Squat depth'),
-  Lesson(3, 'Core bracing'),
-  Lesson(4, 'Push-up form'),
-  Lesson(5, 'Lunge balance'),
-  Lesson(6, 'Pull mechanics'),
-  Lesson(7, 'Overhead press'),
-  Lesson(8, 'Mobility flow'),
-];
-
-/// Lessons unlocked from the start of the unit.
-const unlockedLessons = 4;
-
-/// Weekly challenge target (clean reps).
-const challengeTarget = 100;
-
-/// Main-app state derived from the stored profile and sessions.
+/// Main-app state, derived from the profile and stored workouts.
 class AppController extends ChangeNotifier {
-  AppController(this._store, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+  AppController(this._repo, UserData data, {DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now,
+      _profile = data.profile!,
+      _sessions = List.of(data.sessions),
+      _frozen = Set.of(data.frozenDays);
 
-  final ProgressStore _store;
+  final Repository _repo;
   final DateTime Function() _clock;
+  Profile _profile;
+  final List<SessionResult> _sessions;
+  final Set<String> _frozen;
 
-  Profile get profile => _store.profile!;
-  List<SessionResult> get sessions => _store.sessions;
+  Profile get profile => _profile;
+  Repository get repository => _repo;
+  List<SessionResult> get sessions => List.unmodifiable(_sessions);
+  Set<Limitation> get limits => _profile.limitations;
 
   DateTime get now => _clock();
   DateTime get _today => _day(now);
-
   static DateTime _day(DateTime t) => DateTime(t.year, t.month, t.day);
+  static String dayKey(DateTime t) =>
+      '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
 
-  Set<DateTime> get _trainedDays => {for (final s in sessions) _day(s.at)};
+  // Daily goal and streak
 
-  /// The most recent set finished today, if any.
-  SessionResult? get today {
-    for (final s in sessions.reversed) {
-      if (_day(s.at) == _today) return s;
-    }
-    return null;
-  }
+  int get goalSeconds => _profile.minutes * 60;
 
-  bool get doneToday => today != null;
+  int _secondsOn(DateTime day) =>
+      _sessions.where((s) => _day(s.at) == day).fold(0, (sum, s) => sum + s.activeSeconds);
 
-  /// Consecutive training days ending today, or yesterday if today isn't
-  /// done yet (the streak stays alive until midnight).
-  int get streak {
-    final days = _trainedDays;
-    var d = doneToday ? _today : _today.subtract(const Duration(days: 1));
-    var n = 0;
-    while (days.contains(d)) {
+  int get todaySeconds => _secondsOn(_today);
+  double get goalProgress => (todaySeconds / goalSeconds).clamp(0.0, 1.0);
+  bool get goalMetToday => todaySeconds >= goalSeconds;
+
+  bool _counts(DateTime day) => _secondsOn(day) >= goalSeconds || _frozen.contains(dayKey(day));
+
+  /// Days in a row with the daily goal met (or frozen), ending today, or
+  /// yesterday until today's goal is met.
+  int get streak => _streakFrom(goalMetToday ? _today : _today.subtract(const Duration(days: 1)));
+
+  int _streakFrom(DateTime start) {
+    var d = start, n = 0;
+    while (_counts(d)) {
       n++;
       d = d.subtract(const Duration(days: 1));
     }
@@ -71,7 +89,10 @@ class AppController extends ChangeNotifier {
   }
 
   int get bestStreak {
-    final days = _trainedDays.toList()..sort();
+    final days = {
+      for (final s in _sessions) _day(s.at),
+      for (final f in _frozen) DateTime.parse(f),
+    }.where(_counts).toList()..sort();
     var best = 0, run = 0;
     DateTime? prev;
     for (final d in days) {
@@ -82,78 +103,174 @@ class AppController extends ChangeNotifier {
     return best;
   }
 
-  /// Monday-first training days for the current week.
+  /// Monday-first: whether each day this week counted toward the streak.
   List<bool> get week {
     final monday = _today.subtract(Duration(days: _today.weekday - 1));
-    final days = _trainedDays;
-    return [for (var i = 0; i < 7; i++) days.contains(monday.add(Duration(days: i)))];
+    return [for (var i = 0; i < 7; i++) _counts(monday.add(Duration(days: i)))];
   }
 
-  /// Index of today in [week].
   int get todayIndex => _today.weekday - 1;
 
-  /// Day of the plan, counting the day onboarding finished as day 1.
-  int get planDay => _today.difference(_day(profile.createdAt)).inDays + 1;
+  /// Freezes earned (one per [xpPerFreeze] XP) minus those used, max [maxFreezes].
+  int get freezes => (xp ~/ xpPerFreeze - _frozen.length).clamp(0, maxFreezes);
 
-  int get xp => sessions.fold(0, (sum, s) => sum + s.xpGain);
-  int get totalReps => sessions.fold(0, (sum, s) => sum + s.reps);
-  int get errorsCaught => sessions.fold(0, (sum, s) => sum + s.errors.length);
+  /// Spend a freeze on yesterday if it was missed and a streak was running.
+  /// Returns true when a freeze was used.
+  Future<bool> applyFreezeIfNeeded() async {
+    final yesterday = _today.subtract(const Duration(days: 1));
+    if (_counts(yesterday) || freezes == 0) return false;
+    if (_streakFrom(yesterday.subtract(const Duration(days: 1))) == 0) return false;
+    _frozen.add(dayKey(yesterday));
+    notifyListeners();
+    await _repo.saveFrozenDays(_frozen);
+    return true;
+  }
 
-  int? get avgForm => sessions.isEmpty
+  // XP and rank
+
+  int get xp => _sessions.fold(0, (s, x) => s + x.xp);
+  String get weekId => weekIdFor(now);
+  int get weeklyXp => _sessions.where((s) => weekIdFor(s.at) == weekId).fold(0, (s, x) => s + x.xp);
+  Rank get rank => rankFor(xp);
+
+  int get totalReps => _sessions.fold(0, (s, x) => s + x.reps);
+  int get errorsCaught => _sessions.fold(0, (s, x) => s + x.errors.length);
+  int? get avgForm => _sessions.isEmpty
       ? null
-      : (sessions.fold(0, (sum, s) => sum + s.form) / sessions.length).round();
+      : (_sessions.fold(0, (s, x) => s + x.form) / _sessions.length).round();
 
-  bool get hasPerfectSet => sessions.any((s) => s.form == 100 && s.reps >= repTarget);
-
-  /// Clean reps this week toward the weekly challenge.
-  int get challenge {
-    final monday = _today.subtract(Duration(days: _today.weekday - 1));
-    final clean = sessions
-        .where((s) => !_day(s.at).isBefore(monday))
-        .fold(0, (sum, s) => sum + s.cleanReps);
-    return math.min(challengeTarget, clean);
-  }
-
-  /// Distinct path lessons completed.
-  int get masteredCount => {for (final s in sessions) s.lesson}.length;
-
-  /// Lessons the user can see as unlocked on the path.
-  int get unlockedCount => math.max(unlockedLessons, masteredCount + 1);
-
-  /// Today's lesson: the one already done today (for practice), otherwise
-  /// the next one on the path.
-  Lesson get todaysLesson {
-    final done = today;
-    if (done != null) return pathLessons[done.lesson - 1];
-    return pathLessons[math.min(masteredCount, pathLessons.length - 1)];
-  }
-
-  /// The lesson that unlocks after today's.
-  Lesson? get nextLesson {
-    final i = todaysLesson.number;
-    return i < pathLessons.length ? pathLessons[i] : null;
-  }
-
-  /// Form scores for the last 7 sessions, oldest first.
+  /// Form for the last 7 workouts, oldest first.
   List<int> get formHistory => [
-    for (final s in sessions.skip(math.max(0, sessions.length - 7))) s.form,
+    for (final s in _sessions.skip(math.max(0, _sessions.length - 7))) s.form,
   ];
 
-  /// Stamp a finished set with the current lesson and time, then save it.
-  Future<SessionResult> completeSession({
-    required List<bool> repLog,
-    required List<FormError> errors,
-    required int form,
-  }) async {
-    final result = SessionResult(
-      repLog: repLog,
-      errors: errors,
-      form: form,
-      at: now,
-      lesson: todaysLesson.number,
-    );
-    await _store.addSession(result);
-    notifyListeners();
-    return result;
+  Set<Achievement> get badges =>
+      badgesFor(sessions: _sessions, stars: levelStars, bestStreak: bestStreak);
+
+  // Levels
+
+  /// Best stars per level number.
+  Map<int, int> get levelStars {
+    final m = <int, int>{};
+    for (final s in _sessions) {
+      if (s.kind == SessionKind.level && s.level != null) {
+        m[s.level!] = math.max(m[s.level!] ?? 0, s.stars);
+      }
+    }
+    return m;
   }
+
+  int get startLevel => startLevelFor(_profile.experience);
+
+  bool isUnlocked(int n) => n <= startLevel || (levelStars[n - 1] ?? 0) > 0;
+
+  /// The level to play next: the first unlocked one not yet passed.
+  GameLevel get currentLevel {
+    final stars = levelStars;
+    for (var n = startLevel; n <= gameLevels.length; n++) {
+      if (isUnlocked(n) && (stars[n] ?? 0) == 0) return levelByNumber(n);
+    }
+    return gameLevels.last;
+  }
+
+  int get levelsCleared => levelStars.values.where((s) => s > 0).length;
+  int get totalStars => levelStars.values.fold(0, (a, b) => a + b);
+
+  /// Blocks for a level, adapted to the user's limitations.
+  List<Block> blocksFor(GameLevel level) => adaptBlocks(level.blocks, limits);
+
+  Drill get drill =>
+      recommendDrill(sessions: _sessions, profile: _profile, currentLevel: currentLevel.number);
+
+  // Saving
+
+  Future<WorkoutOutcome> completeWorkout({
+    required SessionKind kind,
+    GameLevel? level,
+    required List<BlockResult> blocks,
+    required int activeSeconds,
+    bool demo = false,
+  }) async {
+    if (demo) {
+      // Simulated reps must not earn XP, stars, streak days or leaderboard points.
+      return WorkoutOutcome(
+        demo: true,
+        session: SessionResult(
+          kind: kind,
+          level: level?.number,
+          at: now,
+          blocks: blocks,
+          activeSeconds: activeSeconds,
+          stars: 0,
+          xp: 0,
+        ),
+      );
+    }
+    final stars0 = levelStars;
+    final rank0 = rank;
+    final badges0 = badges;
+    final goal0 = goalMetToday;
+
+    final draft = SessionResult(
+      kind: kind,
+      level: level?.number,
+      at: now,
+      blocks: blocks,
+      activeSeconds: activeSeconds,
+      stars: 0,
+      xp: 0,
+    );
+    final adapted = level == null ? null : blocksFor(level);
+    final complete =
+        adapted != null && blocks.length == adapted.length && blocks.every((b) => b.complete);
+    final stars = level == null
+        ? 0
+        : starsFor(form: draft.form, passForm: level.passForm, complete: complete);
+    final firstClear = level != null && stars > 0 && (stars0[level.number] ?? 0) == 0;
+    final session = SessionResult(
+      kind: kind,
+      level: level?.number,
+      at: draft.at,
+      blocks: blocks,
+      activeSeconds: activeSeconds,
+      stars: stars,
+      xp: xpFor(
+        kind: kind,
+        cleanReps: draft.cleanReps,
+        stars: stars,
+        firstClear: firstClear,
+        boss: level?.boss ?? false,
+      ),
+    );
+
+    _sessions.add(session);
+    final saved = await _repo.addSession(session, _boardUpdate());
+    _sessions[_sessions.length - 1] = saved;
+
+    final next = level != null && firstClear && level.number < gameLevels.length
+        ? levelByNumber(level.number + 1)
+        : null;
+    final outcome = WorkoutOutcome(
+      session: saved,
+      firstClear: firstClear,
+      unlocked: next != null && next.number > startLevel ? next : null,
+      rankUp: rank.minXp > rank0.minXp ? rank : null,
+      newBadges: badges.difference(badges0),
+      goalJustMet: !goal0 && goalMetToday,
+    );
+    notifyListeners();
+    return outcome;
+  }
+
+  Future<void> setNickname(String nickname) => updateProfile(_profile.copyWith(nickname: nickname));
+
+  /// Save edited settings. Levels, drills and the daily goal follow at once.
+  Future<void> updateProfile(Profile p) async {
+    _profile = p;
+    notifyListeners();
+    await _repo.saveProfile(_profile, _boardUpdate());
+  }
+
+  LeaderboardUpdate _boardUpdate() =>
+      LeaderboardUpdate(nickname: _profile.nickname, xp: xp, weeklyXp: weeklyXp, weekId: weekId);
 }

@@ -1,49 +1,79 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
-import '../../tracking/camera_tracker.dart';
 import '../../tracking/pose.dart';
 import '../../tracking/simulated_tracker.dart';
-import '../../tracking/squat_analyzer.dart';
+import '../../game/exercises.dart';
+import '../../game/levels.dart';
 import '../../tracking/tracker.dart';
 import '../../widgets/common.dart';
 import '../../widgets/decor.dart';
+import '../../widgets/exercise_demo.dart';
 import '../app_controller.dart';
 import '../widgets/rep_dots.dart';
 import 'results_screen.dart';
 
-const _praise = ['Nice depth!', 'Clean rep!', 'Chest proud, love it', 'Smooth!'];
+// Generic on purpose: these follow any exercise, and holds aren't reps.
+const _praise = ['Clean rep!', 'Nice form!', 'Smooth!', 'Great control!'];
+const _holdPraise = ['Solid hold!', 'Steady!', 'Looking strong!'];
 
-/// Camera setup → countdown → live tracked set, driven by a [SquatTracker].
+/// Camera setup → countdown → each exercise in turn → results, driven by a
+/// [WorkoutTracker].
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({super.key, required this.app, required this.trackerFactory});
+  const CameraScreen({
+    super.key,
+    required this.app,
+    required this.trackerFactory,
+    required this.kind,
+    required this.blocks,
+    this.level,
+  });
 
   final AppController app;
   final TrackerFactory trackerFactory;
+  final SessionKind kind;
+  final List<Block> blocks;
+  final GameLevel? level;
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  late SquatTracker _tracker;
-  bool _voice = true;
+  late WorkoutTracker _tracker;
   bool _finishing = false;
+
+  /// Refreshes time-based hints even when the camera sends no frames.
+  late final Timer _clock;
 
   @override
   void initState() {
     super.initState();
-    _use(widget.trackerFactory());
+    _use(widget.trackerFactory(widget.blocks, widget.app.limits));
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _tracker.phase == TrackerPhase.setup) setState(() {});
+    });
   }
 
-  void _use(SquatTracker t) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cue mascots swap mid-set; decode them up front so none flashes blank.
+    for (final m in const ['zen', 'laptop', 'cheer', 'lift']) {
+      precacheImage(AssetImage('assets/mascot/$m.png'), context);
+    }
+  }
+
+  void _use(WorkoutTracker t) {
     _tracker = t..addListener(_onTracker);
     t.start();
   }
 
   /// Swap in a fresh tracker (retry the camera, or fall back to the demo).
-  void _replace(SquatTracker t) {
+  void _replace(WorkoutTracker t) {
     _tracker
       ..removeListener(_onTracker)
       ..dispose();
@@ -61,6 +91,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    _clock.cancel();
     _tracker
       ..removeListener(_onTracker)
       ..dispose();
@@ -74,19 +105,26 @@ class _CameraScreenState extends State<CameraScreen> {
     _finishing = true;
     final t = _tracker;
     if (t.phase != TrackerPhase.done) t.finish();
-    if (t.reps == 0) {
+    if (t.totalDone == 0) {
       Navigator.of(context).pop();
       return;
     }
-    final result = await widget.app.completeSession(
-      repLog: t.repLog,
-      errors: t.errors,
-      form: t.finalScore,
+    final outcome = await widget.app.completeWorkout(
+      kind: widget.kind,
+      level: widget.level,
+      blocks: t.results,
+      activeSeconds: t.elapsed.inSeconds,
+      demo: t.simulated,
     );
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
-        builder: (_) => ResultsScreen(app: widget.app, result: result),
+        builder: (_) => ResultsScreen(
+          app: widget.app,
+          outcome: outcome,
+          level: widget.level,
+          trackerFactory: widget.trackerFactory,
+        ),
       ),
     );
   }
@@ -98,7 +136,10 @@ class _CameraScreenState extends State<CameraScreen> {
       TrackerPhase.permissionDenied || TrackerPhase.unavailable => true,
       _ => false,
     };
-    final setup = !_workout && t.phase != TrackerPhase.done;
+    final setup = switch (t.phase) {
+      TrackerPhase.workout || TrackerPhase.transition || TrackerPhase.done => false,
+      _ => true,
+    };
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -117,16 +158,17 @@ class _CameraScreenState extends State<CameraScreen> {
                         : t.simulated
                         ? (setup ? 'DEMO' : 'DEMO SET')
                         : (setup ? 'CALIBRATING' : 'TRACKING'),
-                    voice: _voice,
                     onBack: setup ? () => Navigator.of(context).pop() : _finish,
-                    onToggleVoice: () => setState(() => _voice = !_voice),
                   ),
                   Expanded(
                     child: blocked
                         ? _Blocked(
                             denied: t.phase == TrackerPhase.permissionDenied,
-                            onRetry: () => _replace(widget.trackerFactory()),
-                            onDemo: () => _replace(SimulatedTracker()),
+                            onRetry: () =>
+                                _replace(widget.trackerFactory(widget.blocks, widget.app.limits)),
+                            onDemo: () => _replace(
+                              SimulatedTracker(widget.blocks, limits: widget.app.limits),
+                            ),
                           )
                         : _viewport(setup),
                   ),
@@ -138,6 +180,7 @@ class _CameraScreenState extends State<CameraScreen> {
                     _WorkoutControls(
                       cue: _cue(),
                       repLog: t.repLog,
+                      total: t.block.units,
                       paused: t.paused,
                       onTogglePause: () => t.setPaused(!t.paused),
                       onEnd: _finish,
@@ -155,10 +198,10 @@ class _CameraScreenState extends State<CameraScreen> {
     final t = _tracker;
     final calibrated = t.checks.first;
     final preview = t.buildPreview();
-    final previewSize = t is CameraTracker ? t.previewSize : null;
+    final previewSize = t.previewSize;
     return Stack(
       children: [
-        if (preview != null && previewSize != null)
+        if (preview != null && previewSize != null && !t.simulated)
           // Real camera: fill the area, overlay the detected skeleton.
           Positioned.fill(
             child: ClipRect(
@@ -185,32 +228,20 @@ class _CameraScreenState extends State<CameraScreen> {
               ),
             ),
           )
-        else
-          // Demo: the stylised skeleton on a fixed 390×500 canvas.
+        else if (t.simulated)
+          // Demo: the exercise animation stands in for the camera.
           Positioned.fill(
-            child: FittedBox(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                width: 390,
-                height: 500,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      left: 75,
-                      top: 86,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 300),
-                        opacity: setup ? (calibrated ? .9 : .3) : 1,
-                        child: CustomPaint(
-                          size: const Size(240, 360),
-                          painter: _PosePainter(
-                            depth: t.depth,
-                            kneeError: t.liveIssue == FormIssue.kneesIn,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+            child: Center(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: setup ? (calibrated ? .9 : .4) : 1,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .92),
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: ExerciseDemo(exercise: t.block.exercise, height: 300),
                 ),
               ),
             ),
@@ -250,8 +281,17 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
         if (t.phase == TrackerPhase.starting)
           const Center(child: CircularProgressIndicator(color: AppColors.pink)),
+        if (_cantSee(t))
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: 12,
+            child: _CantSeeYou(
+              onDemo: () => _replace(SimulatedTracker(widget.blocks, limits: widget.app.limits)),
+            ),
+          ),
         if (_workout) ...[
-          Positioned(left: 18, top: 12, child: _RepCounter(reps: t.reps)),
+          Positioned(left: 18, top: 12, child: _RepCounter(tracker: t)),
           Positioned(
             right: 18,
             top: 12,
@@ -280,6 +320,45 @@ class _CameraScreenState extends State<CameraScreen> {
               ),
             ),
           ),
+        if (t.phase == TrackerPhase.transition && t.nextBlock != null)
+          Positioned.fill(
+            child: ColoredBox(
+              color: AppColors.inkDeep.withValues(alpha: .85),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                spacing: 10,
+                children: [
+                  Text('Nice! Next up', style: nunito(15, color: AppColors.lime)),
+                  Text(t.nextBlock!.label, style: baloo(32, color: Colors.white)),
+                  Container(
+                    width: 220,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .92),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: ExerciseDemo(exercise: t.nextBlock!.exercise, height: 150),
+                  ),
+                  Text(
+                    t.nextBlock!.exercise.setupHint,
+                    style: nunito(15, weight: FontWeight.w700, color: AppColors.textOnDark),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 96,
+                    height: 96,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.pink,
+                      shape: BoxShape.circle,
+                      boxShadow: hardShadow(AppColors.pinkDark, 6),
+                    ),
+                    child: Text('${t.count}', style: baloo(54, height: 1, color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (_workout && t.paused)
           Positioned.fill(
             child: ColoredBox(
@@ -302,31 +381,86 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
+  /// No whole body found for a while during setup: the camera may be
+  /// covered, too dark, too close, or only seeing background clutter.
+  static bool _cantSee(WorkoutTracker t) =>
+      !t.simulated &&
+      t.phase == TrackerPhase.setup &&
+      !t.checks.first &&
+      t.setupTime > const Duration(seconds: 8);
+
   _Cue _cue() {
     final t = _tracker;
     if (!t.bodyVisible) {
       return const _Cue('Step back so I can see your whole body', AppColors.orange, 'laptop');
     }
-    if (t.liveIssue == FormIssue.kneesIn) {
-      return const _Cue('Knees caving in! Push them out', AppColors.red, 'laptop');
+    if (!t.inPosition) {
+      return _Cue(
+        'Get into position: ${t.block.exercise.setupHint.toLowerCase()}',
+        AppColors.orange,
+        'laptop',
+      );
     }
-    if (t.liveIssue == FormIssue.shallow) {
-      return const _Cue('Go lower: hips to knee height', AppColors.orange, 'laptop');
+    if (t.liveIssue case final issue?) {
+      final main = issue == t.block.exercise.issues.first;
+      return _Cue(issue.cue, main ? AppColors.red : AppColors.orange, 'laptop');
     }
     final since = t.sinceLastRep;
     if (t.repLog.isNotEmpty &&
         t.repLog.last &&
         since != null &&
         since < const Duration(milliseconds: 700)) {
-      return _Cue(_praise[t.reps % _praise.length], AppColors.green, 'cheer');
+      final words = t.block.exercise.timed ? _holdPraise : _praise;
+      return _Cue(words[t.reps % words.length], AppColors.green, 'cheer');
     }
-    if (t.reps >= repTarget - 3) {
-      return _Cue("${repTarget - t.reps} more, you've got this!", AppColors.purple, 'lift');
+    final left = t.block.units - t.reps;
+    if (left <= 3 && left > 0) {
+      final unit = t.block.exercise.timed ? '${left * Exercise.holdSegment}s' : '$left more';
+      return _Cue("$unit, you've got this!", AppColors.purple, 'lift');
     }
+    // The exercise's own first cue, e.g. "Hips to knee height". Between
+    // exercises, prepare for the next one.
+    final upcoming = t.phase == TrackerPhase.transition ? t.nextBlock : null;
+    final (cue, detail) = (upcoming ?? t.block).exercise.cues.first;
     return _Cue(
-      "Sit back like there's a chair behind you",
+      '$cue: ${detail[0].toLowerCase()}${detail.substring(1)}',
       Colors.white.withValues(alpha: .12),
       'zen',
+    );
+  }
+}
+
+class _CantSeeYou extends StatelessWidget {
+  const _CantSeeYou({required this.onDemo});
+
+  final VoidCallback onDemo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+        decoration: BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(18)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("I can't see you yet", style: baloo(18, color: Colors.white)),
+            Text(
+              'Step back so your whole body fits, turn on more light, and check nothing covers the camera.',
+              style: nunito(13, weight: FontWeight.w700, color: Colors.white),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onDemo,
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                child: Text('Try the demo set', style: nunito(14, color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -442,19 +576,11 @@ class _Cue {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.setup,
-    required this.tag,
-    required this.voice,
-    required this.onBack,
-    required this.onToggleVoice,
-  });
+  const _TopBar({required this.setup, required this.tag, required this.onBack});
 
   final bool setup;
   final String tag;
-  final bool voice;
   final VoidCallback onBack;
-  final VoidCallback onToggleVoice;
 
   @override
   Widget build(BuildContext context) {
@@ -489,25 +615,8 @@ class _TopBar extends StatelessWidget {
               ],
             ),
           ),
-          Semantics(
-            button: true,
-            toggled: voice,
-            label: 'Voice coaching',
-            excludeSemantics: true,
-            child: GestureDetector(
-              onTap: onToggleVoice,
-              child: Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: translucent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(voice ? 'Voice on' : 'Voice off', style: nunito(13)),
-              ),
-            ),
-          ),
+          // Balances the back button so the tag stays centred.
+          const SizedBox(width: 40),
         ],
       ),
     );
@@ -515,20 +624,28 @@ class _TopBar extends StatelessWidget {
 }
 
 class _RepCounter extends StatelessWidget {
-  const _RepCounter({required this.reps});
+  const _RepCounter({required this.tracker});
 
-  final int reps;
+  final WorkoutTracker tracker;
 
   @override
   Widget build(BuildContext context) {
+    final t = tracker;
+    final b = t.block;
+    final timed = b.exercise.timed;
+    final value = timed ? t.heldSeconds.floor().clamp(0, b.target) : t.reps;
+    final target = timed ? b.target : b.units;
+    final step = t.blocks.length > 1 ? ' · ${t.blockIndex + 1}/${t.blocks.length}' : '';
     return Semantics(
-      label: '$reps of $repTarget reps',
+      label: timed
+          ? '$value of $target seconds of ${b.exercise.label}'
+          : '$value of $target ${b.exercise.plural}',
       excludeSemantics: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'REPS',
+            '${b.exercise.label.toUpperCase()}$step',
             style: nunito(
               10,
               weight: FontWeight.w900,
@@ -538,10 +655,10 @@ class _RepCounter extends StatelessWidget {
           ),
           Text.rich(
             TextSpan(
-              text: '$reps',
+              text: '$value',
               children: [
                 TextSpan(
-                  text: '/$repTarget',
+                  text: timed ? '/${target}s' : '/$target',
                   style: baloo(28, color: AppColors.textFaint),
                 ),
               ],
@@ -654,6 +771,7 @@ class _WorkoutControls extends StatelessWidget {
   const _WorkoutControls({
     required this.cue,
     required this.repLog,
+    required this.total,
     required this.paused,
     required this.onTogglePause,
     required this.onEnd,
@@ -661,6 +779,7 @@ class _WorkoutControls extends StatelessWidget {
 
   final _Cue cue;
   final List<bool> repLog;
+  final int total;
   final bool paused;
   final VoidCallback onTogglePause;
   final VoidCallback onEnd;
@@ -691,14 +810,24 @@ class _WorkoutControls extends StatelessWidget {
                       color: Colors.white.withValues(alpha: .9),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Image.asset('assets/mascot/${cue.mascot}.png', fit: BoxFit.contain),
+                    child: Image.asset(
+                      'assets/mascot/${cue.mascot}.png',
+                      fit: BoxFit.contain,
+                      // Keep the old mascot until the new one is decoded.
+                      gaplessPlayback: true,
+                    ),
                   ),
                   Expanded(child: Text(cue.text, style: nunito(16, height: 1.25))),
                 ],
               ),
             ),
           ),
-          RepDots(repLog: repLog, height: 8, empty: Colors.white.withValues(alpha: .15)),
+          RepDots(
+            repLog: repLog,
+            total: total,
+            height: 8,
+            empty: Colors.white.withValues(alpha: .15),
+          ),
           Row(
             spacing: 10,
             children: [
@@ -731,78 +860,4 @@ class _WorkoutControls extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Pose skeleton in a 200×300 design space. [depth] 0–1 lowers the body
-/// into the squat; [kneeError] draws the knees caving in.
-class _PosePainter extends CustomPainter {
-  _PosePainter({required this.depth, required this.kneeError});
-
-  final double depth;
-  final bool kneeError;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.scale(size.width / 200, size.height / 300);
-    final d = depth;
-    final headY = 34 + d * 40;
-    final neckY = 50 + d * 40;
-    final shY = 88 + d * 40;
-    final elY = shY + 38;
-    final haY = shY + 60;
-    final hipY = 168 + d * 46;
-    final kY = 218 + d * 6;
-    // Knees track out as you sink; when caving they collapse toward centre.
-    final kL = kneeError ? 96.0 : 66 - d * 10;
-    final kR = kneeError ? 104.0 : 134 + d * 10;
-    final kneeColor = kneeError ? AppColors.red : AppColors.lime;
-
-    Paint stroke(Color c, [double w = 4]) => Paint()
-      ..color = c
-      ..strokeWidth = w
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    void line(double x1, double y1, double x2, double y2, Paint p) =>
-        canvas.drawLine(Offset(x1, y1), Offset(x2, y2), p);
-
-    final body = stroke(AppColors.lime);
-    line(100, neckY, 100, shY, body);
-    line(75, shY, 125, shY, body);
-    line(75, shY, 56, elY, body);
-    line(56, elY, 90, haY, body);
-    line(125, shY, 144, elY, body);
-    line(144, elY, 110, haY, body);
-    line(75, shY, 84, hipY, body);
-    line(125, shY, 116, hipY, body);
-    line(84, hipY, 116, hipY, body);
-    canvas.drawCircle(Offset(100, headY), 16, body);
-
-    final legs = stroke(kneeColor);
-    line(84, hipY, kL, kY, legs);
-    line(kL, kY, 70, 274, legs);
-    line(116, hipY, kR, kY, legs);
-    line(kR, kY, 130, 274, legs);
-
-    final fill = Paint()..color = Colors.white;
-    final ring = stroke(AppColors.lime, 3);
-    for (final p in [
-      Offset(75, shY),
-      Offset(125, shY),
-      Offset(84, hipY),
-      Offset(116, hipY),
-      const Offset(70, 274),
-      const Offset(130, 274),
-    ]) {
-      canvas
-        ..drawCircle(p, 5, fill)
-        ..drawCircle(p, 5, ring);
-    }
-    final knee = Paint()..color = kneeColor;
-    canvas
-      ..drawCircle(Offset(kL, kY), 7, knee)
-      ..drawCircle(Offset(kR, kY), 7, knee);
-  }
-
-  @override
-  bool shouldRepaint(_PosePainter old) => old.depth != depth || old.kneeError != kneeError;
 }

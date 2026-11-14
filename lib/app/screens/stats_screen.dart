@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../game/progression.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import '../app_controller.dart';
@@ -56,7 +57,7 @@ class StatsScreen extends StatelessWidget {
         const SizedBox(height: 14),
         _FormChart(values: app.formHistory),
         const SizedBox(height: 14),
-        const Eyebrow('ACHIEVEMENTS'),
+        Eyebrow('BADGES · ${app.badges.length}/${Achievement.values.length}'),
         const SizedBox(height: 14),
         _grid(
           [
@@ -77,49 +78,27 @@ class StatsScreen extends StatelessWidget {
                 ),
               ),
           ],
-          columns: 4,
+          columns: 3,
           gap: 8,
         ),
       ],
     );
   }
 
-  /// Spark: 7-day streak · Rep club: 500 reps · Blaze: 30-day streak ·
-  /// Perfect form: a full set scored 100.
-  static List<(String, String, Color, Color, Color, bool)> _badges(AppController app) => [
-    (
-      '7',
-      'Spark',
-      const Color(0xFFFFE9D6),
-      const Color(0xFFE26F0A),
-      const Color(0xFF9A6A3D),
-      app.bestStreak >= 7,
-    ),
-    (
-      '500',
-      'Rep club',
-      const Color(0xFFFFE0EF),
-      const Color(0xFFE0217F),
-      const Color(0xFFA0476F),
-      app.totalReps >= 500,
-    ),
-    (
-      '30',
-      'Blaze',
-      AppColors.purpleTint,
-      AppColors.purple,
-      const Color(0xFF6A4D9C),
-      app.bestStreak >= 30,
-    ),
-    (
-      '100',
-      'Perfect form',
-      const Color(0xFFE3F7EE),
-      _successFg,
-      const Color(0xFF3F7A64),
-      app.hasPerfectSet,
-    ),
+  static const _tints = [
+    (Color(0xFFFFE9D6), Color(0xFFE26F0A), Color(0xFF9A6A3D)),
+    (Color(0xFFFFE0EF), Color(0xFFE0217F), Color(0xFFA0476F)),
+    (AppColors.purpleTint, AppColors.purple, Color(0xFF6A4D9C)),
+    (Color(0xFFE3F7EE), _successFg, Color(0xFF3F7A64)),
   ];
+
+  static List<(String, String, Color, Color, Color, bool)> _badges(AppController app) {
+    final earned = app.badges;
+    return [
+      for (final (i, b) in Achievement.values.indexed)
+        (b.mark, b.label, _tints[i % 4].$1, _tints[i % 4].$2, _tints[i % 4].$3, earned.contains(b)),
+    ];
+  }
 
   /// Equal-width, equal-height grid rows.
   static Widget _grid(List<Widget> items, {required int columns, required double gap}) {
