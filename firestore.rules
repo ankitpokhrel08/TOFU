@@ -1,0 +1,63 @@
+rules_version = '2';
+
+// Gym Guru. Private data per user, plus a public leaderboard that only the
+// owner can write, with limits on how fast XP can grow. Anything else in
+// this project is denied by default.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Must match maxXpPerWorkout in lib/game/progression.dart.
+    function maxGain() {
+      return 1000;
+    }
+
+    match /gymguru_users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /sessions/{sessionId} {
+        allow read, delete: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.xp is int
+          && request.resource.data.xp >= 0
+          && request.resource.data.xp <= maxGain();
+        allow update: if false;
+      }
+    }
+
+    match /gymguru_leaderboard/{uid} {
+      allow read: if signedIn();
+      allow delete: if isOwner(uid);
+
+      function validShape(d) {
+        return d.keys().hasOnly(['nickname', 'xp', 'weeklyXp', 'weekId', 'updatedAt'])
+          && d.nickname is string && d.nickname.size() >= 2 && d.nickname.size() <= 20
+          && d.xp is int && d.xp >= 0
+          && d.weeklyXp is int && d.weeklyXp >= 0 && d.weeklyXp <= d.xp
+          && d.weekId is string && d.weekId.size() <= 10
+          && d.updatedAt == request.time;
+      }
+
+      allow create: if isOwner(uid)
+        && validShape(request.resource.data)
+        && request.resource.data.xp <= maxGain();
+
+      allow update: if isOwner(uid)
+        && validShape(request.resource.data)
+        // XP never goes down, and grows by at most one workout per write.
+        && request.resource.data.xp >= resource.data.xp
+        && request.resource.data.xp - resource.data.xp <= maxGain()
+        && (request.resource.data.weekId == resource.data.weekId
+              ? request.resource.data.weeklyXp - resource.data.weeklyXp <= maxGain()
+                && request.resource.data.weeklyXp >= resource.data.weeklyXp
+              : request.resource.data.weeklyXp <= maxGain());
+    }
+  }
+}
