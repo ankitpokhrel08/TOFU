@@ -15,7 +15,7 @@ and turns training into a game: 20 levels, stars, XP, streaks and a global leade
 ![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore-FFCA28?logo=firebase&logoColor=black)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)
 
-[Overview](#overview) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Getting started](#getting-started) · [Roadmap](#roadmap)
+[Overview](#overview) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Download](#download) · [Getting started](#getting-started) · [Roadmap](#roadmap)
 
 </div>
 
@@ -157,6 +157,10 @@ lib/
 - **Offline-first:** Firestore's on-device cache keeps training working offline. Startup shows cached data immediately and refreshes from the server in the background.
 - **Accessibility:** custom controls expose semantics, coaching cues are live regions, and animations show a still frame when the system's reduce-motion setting is on.
 
+## Download
+
+Get the latest APK from [Releases](../../releases/latest) and install it on an Android phone (allow installs from your browser when asked). Sign in with Google and you're ready to train.
+
 ## Getting started
 
 ### Requirements
@@ -166,33 +170,35 @@ lib/
 | Flutter | 3.47 (stable) |
 | JDK | 17 or newer |
 | Android SDK | API 36 |
+| Firebase project | Free Spark plan is enough |
+
+### Firebase setup
+
+The repository doesn't include a Firebase config, so a clone runs on your own Firebase project:
+
+1. Create a project in the [Firebase console](https://console.firebase.google.com) and add an Android app with package name `com.gymguru.gym_guru`.
+2. Add your signing key's SHA-1 to that Android app (`cd android && ./gradlew signingReport` prints it), then enable **Google** under Authentication → Sign-in method.
+3. Create a Firestore database.
+4. Generate the config files, which are gitignored:
+
+   ```bash
+   dart pub global activate flutterfire_cli
+   flutterfire configure --platforms=android
+   ```
+
+   This writes `lib/firebase_options.dart` and `android/app/google-services.json`. To fill them in by hand instead, start from `lib/firebase_options.example.dart`.
+5. Deploy the security rules and indexes: `firebase use <your-project-id>`, then `firebase deploy --only firestore`.
 
 ### Run
 
 ```bash
-git clone https://github.com/ankitpokhrel08/gym-guru.git
-cd gym-guru
+git clone <this repository>
+cd <repository folder>
 flutter pub get
 flutter run
 ```
 
-The app is configured for the existing Firebase project. To use your own, run `flutterfire configure --platforms=android`, add your signing key's SHA-1 to the Android app in Firebase, enable Google sign-in, and deploy the rules and indexes with `firebase deploy --only firestore`.
-
-### Tracking tips
-
-Use a physical phone; emulator cameras rarely give a usable feed. Prop the phone at about hip height, 2–3 m away, so your whole body is in frame, and train in good light. Each workout intro shows whether to face the camera or turn side-on.
-
-### Build
-
-```bash
-flutter build apk --release                   # universal APK
-flutter build apk --release --split-per-abi   # smaller per-device APKs
-```
-
-The APK is written to `build/app/outputs/flutter-apk/`. CI also builds one on every push to `main`; download it from the run's **Artifacts** section.
-
-> [!IMPORTANT]
-> Release builds currently use the debug signing key. That's fine for sideloading, but Google Play needs a real upload key, and that key's SHA-1 must also be added to Firebase for Google sign-in to work.
+Use a physical phone; emulator cameras rarely give a usable feed. Prop the phone at about hip height, 2–3 m away, so your whole body is in frame, and train in good light.
 
 ## Testing
 
@@ -201,6 +207,8 @@ dart format --output=none --set-exit-if-changed lib test
 flutter analyze
 flutter test
 ```
+
+Tests don't need Firebase. Without your own config, copy the template first: `cp lib/firebase_options.example.dart lib/firebase_options.dart`.
 
 | Suite | Covers |
 | --- | --- |
@@ -211,7 +219,7 @@ flutter test
 | `exercise_demo_test.dart` | Every animation loads, swaps cleanly and respects reduced motion |
 | `firestore_config_test.dart` | Every leaderboard query has a deployed index; rules cover the app's collections |
 
-To re-run the real-video evaluation, extract poses with MediaPipe and run `POSES=<dir> flutter test tool/video_eval`.
+The pose analyzers can also be checked against real workout videos: extract poses with MediaPipe and run `POSES=<dir> flutter test tool/video_eval`.
 
 ## Roadmap
 

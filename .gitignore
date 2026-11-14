@@ -54,3 +54,8 @@ ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
 # Environment
 .env
 .env.*
+
+# Firebase project config (each developer uses their own; see README)
+.firebaserc
+android/app/google-services.json
+lib/firebase_options.dart
