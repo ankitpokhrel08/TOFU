@@ -36,7 +36,8 @@ class CameraTracker extends WorkoutTracker {
   final _detector = PoseDetector(
     options: PoseDetectorOptions(model: PoseDetectionModel.base, mode: PoseDetectionMode.stream),
   );
-  final SetupChecker _setupChecker;
+  // Recreated per exercise: front and side-on need different checks.
+  SetupChecker _setupChecker;
   late ExerciseAnalyzer _analyzer = analyzerFor(blocks.first.exercise, limits);
 
   CameraController? _controller;
@@ -93,11 +94,14 @@ class CameraTracker extends WorkoutTracker {
             : TrackerPhase.unavailable,
       );
     }
-    setPhase(TrackerPhase.setup);
+    setPhase(TrackerPhase.intro);
   }
 
   @override
   void onBlockStart() => _analyzer = analyzerFor(block.exercise, limits);
+
+  @override
+  void onSetupStart() => _setupChecker = SetupChecker(view: block.exercise.trackingView);
 
   Future<void> _onFrame(CameraImage image) async {
     // Drop frames while the detector is busy so latency stays low.
@@ -121,7 +125,7 @@ class CameraTracker extends WorkoutTracker {
       case TrackerPhase.setup:
         reportLive(progress: 0, pose: pose, bodyVisible: pose != null);
         reportChecks(_setupChecker.update(pose));
-      case TrackerPhase.countdown || TrackerPhase.transition:
+      case TrackerPhase.countdown || TrackerPhase.intro:
         reportLive(progress: 0, pose: pose, bodyVisible: pose != null);
       case TrackerPhase.workout:
         final visible = pose != null && SetupChecker.bodyInFrame(pose, block.exercise.trackingView);

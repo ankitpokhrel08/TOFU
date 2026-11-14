@@ -17,7 +17,7 @@ const _tints = [
   (Color(0xFFEEF4FF), Color(0xFF3B7BD8)),
 ];
 
-/// Workout intro: the exercises, how to stand, and what Guru checks.
+/// Workout intro: the exercises, how to stand, and what Tofu checks.
 class LearnScreen extends StatelessWidget {
   const LearnScreen({
     super.key,
@@ -95,7 +95,7 @@ class LearnScreen extends StatelessWidget {
           for (final (i, b) in blocks.indexed) _BlockCard(index: i, block: b),
           Text(
             'Prop your phone about 2–3 m away at hip height.'
-            '${blocks.length > 1 ? ' Guru switches exercises for you and gives you time to turn.' : ''}',
+            '${blocks.length > 1 ? ' Tofu switches exercises for you and gives you time to turn.' : ''}',
             style: nunito(13, weight: FontWeight.w600, color: AppColors.textMuted),
           ),
         ],

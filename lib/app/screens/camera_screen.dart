@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 import '../../tracking/pose.dart';
 import '../../tracking/simulated_tracker.dart';
+import '../../audio/coach.dart';
+import '../../audio/workout_announcer.dart';
 import '../../game/exercises.dart';
 import '../../game/levels.dart';
 import '../../tracking/tracker.dart';
@@ -49,12 +51,22 @@ class _CameraScreenState extends State<CameraScreen> {
   /// Refreshes time-based hints even when the camera sends no frames.
   late final Timer _clock;
 
+  final _coach = Coach.instance;
+  late final _announcer = WorkoutAnnouncer(_coach);
+
   @override
   void initState() {
     super.initState();
+    final p = widget.app.profile;
+    _coach
+      ..voice = p.voice
+      ..sounds = p.sounds
+      ..reset();
     _use(widget.trackerFactory(widget.blocks, widget.app.limits));
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && _tracker.phase == TrackerPhase.setup) setState(() {});
+      if (!mounted || _tracker.phase != TrackerPhase.setup) return;
+      _announcer.update(_tracker, cantSee: _cantSee(_tracker));
+      setState(() {});
     });
   }
 
@@ -82,6 +94,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   void _onTracker() {
     if (!mounted) return;
+    _announcer.update(_tracker, cantSee: _cantSee(_tracker));
     if (_tracker.phase == TrackerPhase.done) {
       _finish();
     } else {
@@ -117,6 +130,7 @@ class _CameraScreenState extends State<CameraScreen> {
       demo: t.simulated,
     );
     if (!mounted) return;
+    _announceResult(outcome);
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => ResultsScreen(
@@ -137,7 +151,7 @@ class _CameraScreenState extends State<CameraScreen> {
       _ => false,
     };
     final setup = switch (t.phase) {
-      TrackerPhase.workout || TrackerPhase.transition || TrackerPhase.done => false,
+      TrackerPhase.workout || TrackerPhase.done => false,
       _ => true,
     };
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -155,13 +169,21 @@ class _CameraScreenState extends State<CameraScreen> {
                     setup: setup,
                     tag: blocked
                         ? 'NO CAMERA'
+                        : t.phase == TrackerPhase.intro || t.phase == TrackerPhase.starting
+                        ? 'GET READY'
                         : t.simulated
                         ? (setup ? 'DEMO' : 'DEMO SET')
                         : (setup ? 'CALIBRATING' : 'TRACKING'),
-                    onBack: setup ? () => Navigator.of(context).pop() : _finish,
+                    // Leaving before any reps discards; after, it saves what's done.
+                    onBack: t.totalDone == 0 ? () => Navigator.of(context).pop() : _finish,
+                    onHelp: blocked ? null : _showHelp,
+                    voice: _coach.voice,
+                    onToggleVoice: _toggleVoice,
                   ),
                   Expanded(
-                    child: blocked
+                    child: t.phase == TrackerPhase.intro
+                        ? _IntroPanel(tracker: t)
+                        : blocked
                         ? _Blocked(
                             denied: t.phase == TrackerPhase.permissionDenied,
                             onRetry: () =>
@@ -174,8 +196,17 @@ class _CameraScreenState extends State<CameraScreen> {
                   ),
                   if (blocked)
                     const SizedBox(height: 16)
+                  else if (t.phase == TrackerPhase.intro)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 8, 22, 16),
+                      child: ChunkyButton(label: "I'm ready", onPressed: t.confirmIntro),
+                    )
                   else if (setup)
-                    _SetupChecks(checks: t.checks, starting: t.phase == TrackerPhase.starting)
+                    _SetupChecks(
+                      checks: t.checks,
+                      starting: t.phase == TrackerPhase.starting,
+                      hint: t.phase == TrackerPhase.starting ? null : t.block.exercise.setupHint,
+                    )
                   else
                     _WorkoutControls(
                       cue: _cue(),
@@ -320,45 +351,6 @@ class _CameraScreenState extends State<CameraScreen> {
               ),
             ),
           ),
-        if (t.phase == TrackerPhase.transition && t.nextBlock != null)
-          Positioned.fill(
-            child: ColoredBox(
-              color: AppColors.inkDeep.withValues(alpha: .85),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                spacing: 10,
-                children: [
-                  Text('Nice! Next up', style: nunito(15, color: AppColors.lime)),
-                  Text(t.nextBlock!.label, style: baloo(32, color: Colors.white)),
-                  Container(
-                    width: 220,
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .92),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: ExerciseDemo(exercise: t.nextBlock!.exercise, height: 150),
-                  ),
-                  Text(
-                    t.nextBlock!.exercise.setupHint,
-                    style: nunito(15, weight: FontWeight.w700, color: AppColors.textOnDark),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 96,
-                    height: 96,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.pink,
-                      shape: BoxShape.circle,
-                      boxShadow: hardShadow(AppColors.pinkDark, 6),
-                    ),
-                    child: Text('${t.count}', style: baloo(54, height: 1, color: Colors.white)),
-                  ),
-                ],
-              ),
-            ),
-          ),
         if (_workout && t.paused)
           Positioned.fill(
             child: ColoredBox(
@@ -379,6 +371,55 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
       ],
     );
+  }
+
+  void _announceResult(WorkoutOutcome o) {
+    if (o.demo) return;
+    final s = o.session;
+    if (widget.level == null) {
+      _coach.play(Sfx.blockDone);
+      _coach.say('Drill complete. Nice work!', urgent: true);
+    } else if (s.stars > 0) {
+      _coach.play(Sfx.levelUp);
+      _coach.say(
+        'Level complete! ${s.stars} star${s.stars == 1 ? '' : 's'}.'
+        '${o.rankUp != null ? ' You ranked up to ${o.rankUp!.title}!' : ''}',
+        urgent: true,
+      );
+    } else {
+      _coach.play(Sfx.tryAgain);
+      _coach.say(
+        s.complete ? 'So close. Tidy up your form and try again.' : 'Workout saved.',
+        urgent: true,
+      );
+    }
+  }
+
+  Future<void> _toggleVoice() async {
+    final on = !_coach.voice;
+    setState(() => _coach.voice = on);
+    if (on) _coach.say('Voice coaching on.', urgent: true, cooldown: Duration.zero);
+    try {
+      await widget.app.updateProfile(widget.app.profile.copyWith(voice: on));
+    } on Object catch (e) {
+      debugPrint('Saving voice setting failed: $e');
+    }
+  }
+
+  /// How-to sheet for the current exercise. Pauses an active set.
+  Future<void> _showHelp() async {
+    final t = _tracker;
+    final resume = t.phase == TrackerPhase.workout && !t.paused;
+    if (resume) t.setPaused(true);
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.cream,
+      showDragHandle: true,
+      // Size to the content so the close button isn't hidden below the fold.
+      isScrollControlled: true,
+      builder: (_) => _HelpSheet(exercise: t.block.exercise),
+    );
+    if (resume && mounted && _tracker == t) t.setPaused(false);
   }
 
   /// No whole body found for a while during setup: the camera may be
@@ -418,10 +459,8 @@ class _CameraScreenState extends State<CameraScreen> {
       final unit = t.block.exercise.timed ? '${left * Exercise.holdSegment}s' : '$left more';
       return _Cue("$unit, you've got this!", AppColors.purple, 'lift');
     }
-    // The exercise's own first cue, e.g. "Hips to knee height". Between
-    // exercises, prepare for the next one.
-    final upcoming = t.phase == TrackerPhase.transition ? t.nextBlock : null;
-    final (cue, detail) = (upcoming ?? t.block).exercise.cues.first;
+    // The exercise's own first cue, e.g. "Hips to knee height".
+    final (cue, detail) = t.block.exercise.cues.first;
     return _Cue(
       '$cue: ${detail[0].toLowerCase()}${detail.substring(1)}',
       Colors.white.withValues(alpha: .12),
@@ -489,9 +528,9 @@ class _Blocked extends StatelessWidget {
             ),
             Text(
               denied
-                  ? 'Guru needs the camera to count reps and check your form. '
-                        'Allow camera access for Gym Guru in Settings, then try again.'
-                  : "This device doesn't have a camera Guru can use. "
+                  ? 'Tofu needs the camera to count reps and check your form. '
+                        'Allow camera access for TOFU in Settings, then try again.'
+                  : "This device doesn't have a camera Tofu can use. "
                         'You can still try the demo set.',
               textAlign: TextAlign.center,
               style: nunito(15, weight: FontWeight.w600, height: 1.4, color: AppColors.textOnDark),
@@ -576,47 +615,79 @@ class _Cue {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.setup, required this.tag, required this.onBack});
+  const _TopBar({
+    required this.setup,
+    required this.tag,
+    required this.onBack,
+    required this.onHelp,
+    required this.voice,
+    required this.onToggleVoice,
+  });
 
   final bool setup;
   final String tag;
   final VoidCallback onBack;
+  final bool voice;
+  final VoidCallback onToggleVoice;
+
+  /// Shows how to do the current exercise. Null hides the button.
+  final VoidCallback? onHelp;
 
   @override
   Widget build(BuildContext context) {
     final translucent = Colors.white.withValues(alpha: .12);
+    final tagChip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: AppColors.red, borderRadius: BorderRadius.circular(99)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 6,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          ),
+          Text(tag, style: nunito(11, weight: FontWeight.w900, letterSpacing: 1.1)),
+        ],
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      // The tag stays centred whatever buttons sit on either side.
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          SquareIconButton(
-            icon: setup ? Icons.chevron_left_rounded : Icons.close_rounded,
-            label: setup ? 'Back' : 'End set',
-            onTap: onBack,
-            background: translucent,
-            foreground: Colors.white,
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.red,
-              borderRadius: BorderRadius.circular(99),
-            ),
-            child: Row(
-              spacing: 6,
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          tagChip,
+          Row(
+            children: [
+              SquareIconButton(
+                icon: setup ? Icons.chevron_left_rounded : Icons.close_rounded,
+                label: setup ? 'Back' : 'End set',
+                onTap: onBack,
+                background: translucent,
+                foreground: Colors.white,
+              ),
+              const Spacer(),
+              SquareIconButton(
+                icon: voice ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                label: voice ? 'Turn voice coaching off' : 'Turn voice coaching on',
+                onTap: onToggleVoice,
+                background: translucent,
+                foreground: Colors.white,
+              ),
+              if (onHelp != null) ...[
+                const SizedBox(width: 8),
+                SquareIconButton(
+                  icon: Icons.help_outline_rounded,
+                  label: 'How to do this exercise',
+                  onTap: onHelp!,
+                  background: translucent,
+                  foreground: Colors.white,
                 ),
-                Text(tag, style: nunito(11, weight: FontWeight.w900, letterSpacing: 1.1)),
               ],
-            ),
+            ],
           ),
-          // Balances the back button so the tag stays centred.
-          const SizedBox(width: 40),
         ],
       ),
     );
@@ -709,10 +780,13 @@ class _FormReadout extends StatelessWidget {
 }
 
 class _SetupChecks extends StatelessWidget {
-  const _SetupChecks({required this.checks, required this.starting});
+  const _SetupChecks({required this.checks, required this.starting, this.hint});
 
   final List<bool> checks;
   final bool starting;
+
+  /// How to stand for this exercise, e.g. "Turn side-on to the camera".
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -721,6 +795,16 @@ class _SetupChecks extends StatelessWidget {
       child: Column(
         spacing: 8,
         children: [
+          if (hint != null)
+            Row(
+              spacing: 8,
+              children: [
+                const Icon(Icons.info_outline_rounded, color: AppColors.lime, size: 20),
+                Expanded(
+                  child: Text(hint!, style: nunito(15, color: AppColors.lime)),
+                ),
+              ],
+            ),
           for (final (i, label) in setupCheckLabels.indexed)
             Builder(
               builder: (context) {
@@ -857,6 +941,131 @@ class _WorkoutControls extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Before each exercise: what's next, how it looks, and how to stand.
+class _IntroPanel extends StatelessWidget {
+  const _IntroPanel({required this.tracker});
+
+  final WorkoutTracker tracker;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = tracker;
+    final b = t.block;
+    final first = t.blockIndex == 0;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+        child: Column(
+          spacing: 12,
+          children: [
+            Text(
+              t.blocks.length > 1
+                  ? '${first ? 'First' : 'Nice! Next'} · exercise ${t.blockIndex + 1} of ${t.blocks.length}'
+                  : 'Your exercise',
+              style: nunito(15, color: AppColors.lime),
+            ),
+            Text(
+              b.label,
+              textAlign: TextAlign.center,
+              style: baloo(34, height: 1.05, color: Colors.white),
+            ),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .94),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: ExerciseDemo(exercise: b.exercise, height: 230),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              spacing: 8,
+              children: [
+                Icon(
+                  b.exercise.view == CameraView.front
+                      ? Icons.accessibility_new_rounded
+                      : Icons.switch_left_rounded,
+                  color: AppColors.textOnDark,
+                  size: 20,
+                ),
+                Flexible(
+                  child: Text(
+                    b.exercise.setupHint,
+                    textAlign: TextAlign.center,
+                    style: nunito(15, color: AppColors.textOnDark),
+                  ),
+                ),
+              ],
+            ),
+            for (final (cue, detail) in b.exercise.cues.take(2))
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '$cue  ',
+                      style: nunito(14, color: Colors.white),
+                    ),
+                    TextSpan(
+                      text: detail,
+                      style: nunito(14, weight: FontWeight.w600, color: AppColors.textOnDark),
+                    ),
+                  ],
+                ),
+                textAlign: TextAlign.center,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How-to sheet opened from the help button.
+class _HelpSheet extends StatelessWidget {
+  const _HelpSheet({required this.exercise});
+
+  final Exercise exercise;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 10,
+          children: [
+            Text('How to: ${exercise.label}', style: baloo(24)),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.lavender,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: ExerciseDemo(exercise: exercise, height: 220),
+            ),
+            Text(exercise.setupHint, style: nunito(14, color: AppColors.purple)),
+            for (final (cue, detail) in exercise.cues)
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: '$cue  ', style: nunito(14)),
+                    TextSpan(
+                      text: detail,
+                      style: nunito(14, weight: FontWeight.w600, color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 4),
+            ChunkyButton(label: 'Got it', onPressed: () => Navigator.of(context).pop()),
+          ],
+        ),
       ),
     );
   }

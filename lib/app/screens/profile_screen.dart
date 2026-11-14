@@ -199,6 +199,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: _editLimitations,
                       ),
                       _Item(label: 'Best streak', value: '${_app.bestStreak} days'),
+                      SwitchListTile(
+                        title: Text(
+                          'Voice coaching',
+                          style: nunito(14, weight: FontWeight.w700, color: AppColors.textMuted),
+                        ),
+                        value: p.voice,
+                        activeThumbColor: AppColors.pink,
+                        onChanged: (v) => _guard(
+                          () => _app.updateProfile(p.copyWith(voice: v)),
+                          "Couldn't save your settings.",
+                        ),
+                      ),
+                      SwitchListTile(
+                        title: Text(
+                          'Sound effects',
+                          style: nunito(14, weight: FontWeight.w700, color: AppColors.textMuted),
+                        ),
+                        value: p.sounds,
+                        activeThumbColor: AppColors.pink,
+                        onChanged: (v) => _guard(
+                          () => _app.updateProfile(p.copyWith(sounds: v)),
+                          "Couldn't save your settings.",
+                        ),
+                      ),
                     ],
                   ),
                 ),

@@ -29,7 +29,7 @@ Future<void> main() async {
   FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
 
   runApp(
-    GymGuruApp(
+    TofuApp(
       root: AppRoot(
         auth: FirebaseAuthService(),
         repositoryFor: FirestoreRepository.new,
@@ -39,15 +39,15 @@ Future<void> main() async {
   );
 }
 
-class GymGuruApp extends StatelessWidget {
-  const GymGuruApp({super.key, required this.root});
+class TofuApp extends StatelessWidget {
+  const TofuApp({super.key, required this.root});
 
   final Widget root;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Gym Guru',
+      title: 'TOFU',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       home: AnnotatedRegion(value: SystemUiOverlayStyle.dark, child: root),

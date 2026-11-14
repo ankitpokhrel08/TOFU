@@ -55,7 +55,7 @@ class _NameScreenState extends State<NameScreen> {
             image: 'assets/mascot/cheer.png',
             imageWidth: 92,
             bubbleLift: 18,
-            text: "Hey, I'm Guru! What should I call you?",
+            text: "Hey, I'm Tofu! What should I call you?",
           ),
           _Field(
             label: 'Your first name',

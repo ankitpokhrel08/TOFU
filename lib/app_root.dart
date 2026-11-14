@@ -81,12 +81,20 @@ class _AppRootState extends State<AppRoot> {
         return;
       }
       final app = AppController(repo, data, clock: widget.clock);
-      final froze = await app.applyFreezeIfNeeded();
-      if (!mounted) return;
       setState(() {
         _app = app;
         _stage = _Stage.ready;
       });
+      // Opened from the cache: catch up with the server in the background
+      // (another phone may have trained), then settle streak freezes.
+      try {
+        app.replaceData(await repo.loadFromServer());
+      } on Object catch (e) {
+        debugPrint('Refreshing from server failed: $e');
+      }
+      if (!mounted || _app != app) return;
+      final froze = await app.applyFreezeIfNeeded();
+      if (!mounted) return;
       if (froze) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(

@@ -42,6 +42,8 @@ dependencies:
   cloud_firestore: ^7.1.0
   google_sign_in: ^7.2.0
   lottie: ^3.8.2
+  flutter_tts: ^4.2.5
+  audioplayers: ^6.8.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -68,6 +70,7 @@ flutter:
     - assets/mascot/
     - assets/google_fonts/
     - assets/exercises/
+    - assets/sounds/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

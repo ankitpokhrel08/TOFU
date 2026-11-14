@@ -36,7 +36,7 @@ class WelcomeScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(99),
                         ),
                         child: Text(
-                          'GYM GURU',
+                          'TOFU',
                           style: baloo(15, color: Colors.white, letterSpacing: 2.7),
                         ),
                       ),
@@ -59,7 +59,7 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Guru watches your form through the camera, counts every rep, '
+                        'Tofu watches your form through the camera, counts every rep, '
                         'and teaches you one new skill daily.',
                         textAlign: TextAlign.center,
                         style: nunito(
@@ -122,7 +122,7 @@ class _Hero extends StatelessWidget {
         children: [
           _circle(290, .22),
           _circle(210, .25),
-          Image.asset('assets/mascot/lift.png', width: 270, semanticLabel: 'Guru lifting'),
+          Image.asset('assets/mascot/lift.png', width: 270, semanticLabel: 'Tofu lifting'),
           const Positioned(
             left: 0,
             top: 44,

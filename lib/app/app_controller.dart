@@ -262,6 +262,19 @@ class AppController extends ChangeNotifier {
     return outcome;
   }
 
+  /// Swap in newer data (e.g. the server copy after a fast cached start).
+  void replaceData(UserData data) {
+    if (data.profile == null) return;
+    _profile = data.profile!;
+    _sessions
+      ..clear()
+      ..addAll(data.sessions);
+    _frozen
+      ..clear()
+      ..addAll(data.frozenDays);
+    notifyListeners();
+  }
+
   Future<void> setNickname(String nickname) => updateProfile(_profile.copyWith(nickname: nickname));
 
   /// Save edited settings. Levels, drills and the daily goal follow at once.

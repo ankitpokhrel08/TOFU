@@ -18,13 +18,13 @@ enum TrackerPhase {
   /// No usable camera (emulator, desktop, or a camera error).
   unavailable,
 
-  /// Waiting for the setup checks to pass.
+  /// Showing the next exercise's demo; waits for the user to continue.
+  intro,
+
+  /// Calibrating position for the current exercise.
   setup,
   countdown,
   workout,
-
-  /// Between exercises: "next up" with a short countdown.
-  transition,
 
   /// All blocks finished, or ended early.
   done,
@@ -40,8 +40,9 @@ const setupCheckLabels = [
 /// a camera can use the demo tracker.
 typedef TrackerFactory = WorkoutTracker Function(List<Block> blocks, Set<Limitation> limits);
 
-/// Common lifecycle for a workout of one or more [blocks]:
-/// setup → countdown → block 1 → transition → block 2 … → done.
+/// Common lifecycle for a workout of one or more [blocks]. Each block runs
+/// intro (demo + continue) → setup (calibrate position) → countdown →
+/// workout, then the next block's intro … → done.
 /// Subclasses feed in setup checks, live pose data and completed reps.
 abstract class WorkoutTracker extends ChangeNotifier {
   WorkoutTracker(
@@ -107,7 +108,7 @@ abstract class WorkoutTracker extends ChangeNotifier {
 
   final _clock = Stopwatch();
 
-  /// Active training time (excludes setup, countdowns, transitions, pauses).
+  /// Active training time (excludes intros, setup, countdowns, pauses).
   Duration get elapsed => _clock.elapsed;
 
   bool _paused = false;
@@ -127,6 +128,9 @@ abstract class WorkoutTracker extends ChangeNotifier {
       ),
   ];
 
+  /// Form errors in the current block, oldest first.
+  List<FormError> get errors => List.unmodifiable(_errors[_index]);
+
   /// Units done across all blocks.
   int get totalDone => _logs.fold(0, (s, l) => s + l.length);
 
@@ -144,6 +148,18 @@ abstract class WorkoutTracker extends ChangeNotifier {
   /// Called when a block's counting begins (reset analyzers here).
   @protected
   void onBlockStart() {}
+
+  /// Called when calibration starts for the current block.
+  @protected
+  void onSetupStart() {}
+
+  /// The user watched the demo and is ready: calibrate for this exercise.
+  void confirmIntro() {
+    if (_phase != TrackerPhase.intro) return;
+    _checks = const [false, false, false];
+    onSetupStart();
+    setPhase(TrackerPhase.setup);
+  }
 
   void setPaused(bool v) {
     if (_phase != TrackerPhase.workout || _paused == v) return;
@@ -211,7 +227,8 @@ abstract class WorkoutTracker extends ChangeNotifier {
         _phase = TrackerPhase.done;
       } else {
         HapticFeedback.heavyImpact();
-        _runCountdown(TrackerPhase.transition);
+        _index++;
+        _phase = TrackerPhase.intro;
       }
     }
     notifyListeners();
@@ -224,20 +241,16 @@ abstract class WorkoutTracker extends ChangeNotifier {
     setPhase(TrackerPhase.done);
   }
 
-  /// Countdown into the next block. Switching between facing the camera and
-  /// side-on gets extra time to turn.
+  /// Countdown into the current block once its position is calibrated.
   void _runCountdown(TrackerPhase phase) {
-    final turning =
-        phase == TrackerPhase.transition && nextBlock!.exercise.view != block.exercise.view;
     _phase = phase;
-    _count = phase == TrackerPhase.transition ? (turning ? 5 : 3) : _countFrom;
+    _count = _countFrom;
     _countdown?.cancel();
     _countdown = Timer.periodic(countdownStep, (t) {
       if (_count > 1) {
         _count--;
       } else {
         t.cancel();
-        if (_phase == TrackerPhase.transition) _index++;
         _phase = TrackerPhase.workout;
         _clock.start();
         onBlockStart();

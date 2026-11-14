@@ -138,6 +138,8 @@ class Profile {
     required this.minutes,
     required this.limitations,
     required this.createdAt,
+    this.voice = true,
+    this.sounds = true,
   });
 
   factory Profile.fromJson(Map<String, dynamic> j) => Profile(
@@ -151,7 +153,15 @@ class Profile {
         Limitation.values.byName(l as String),
     },
     createdAt: DateTime.parse(j['createdAt'] as String),
+    voice: j['voice'] as bool? ?? true,
+    sounds: j['sounds'] as bool? ?? true,
   );
+
+  /// Spoken coaching during workouts.
+  final bool voice;
+
+  /// Sound effects (reps, countdown, celebrations).
+  final bool sounds;
 
   /// First name, for greetings.
   final String name;
@@ -170,16 +180,24 @@ class Profile {
   final Set<Limitation> limitations;
   final DateTime createdAt;
 
-  Profile copyWith({String? nickname, String? goal, int? minutes, Set<Limitation>? limitations}) =>
-      Profile(
-        name: name,
-        nickname: nickname ?? this.nickname,
-        goal: goal ?? this.goal,
-        experience: experience,
-        minutes: minutes ?? this.minutes,
-        limitations: limitations ?? this.limitations,
-        createdAt: createdAt,
-      );
+  Profile copyWith({
+    String? nickname,
+    String? goal,
+    int? minutes,
+    Set<Limitation>? limitations,
+    bool? voice,
+    bool? sounds,
+  }) => Profile(
+    name: name,
+    nickname: nickname ?? this.nickname,
+    goal: goal ?? this.goal,
+    experience: experience,
+    minutes: minutes ?? this.minutes,
+    limitations: limitations ?? this.limitations,
+    createdAt: createdAt,
+    voice: voice ?? this.voice,
+    sounds: sounds ?? this.sounds,
+  );
 
   Map<String, dynamic> toJson() => {
     'name': name,
@@ -189,6 +207,8 @@ class Profile {
     'minutes': minutes,
     'limitations': [for (final l in limitations) l.name],
     'createdAt': createdAt.toIso8601String(),
+    'voice': voice,
+    'sounds': sounds,
   };
 }
 

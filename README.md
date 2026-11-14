@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="assets/mascot/lift.png" width="140" alt="Guru, the Gym Guru mascot"/>
+<img src="assets/mascot/lift.png" width="140" alt="Tofu, the TOFU mascot"/>
 
-# Gym Guru
+# TOFU
 
 **An AI personal trainer that fits in five minutes a day.**
 
-Gym Guru watches each rep through your phone's camera, coaches your form in real time,<br/>
+TOFU watches each rep through your phone's camera, coaches your form by voice in real time,<br/>
 and turns training into a game: 20 levels, stars, XP, streaks and a global leaderboard.
 
 [![CI](https://github.com/ankitpokhrel08/gym-guru/actions/workflows/ci.yml/badge.svg)](https://github.com/ankitpokhrel08/gym-guru/actions/workflows/ci.yml)
@@ -20,20 +20,20 @@ and turns training into a game: 20 levels, stars, XP, streaks and a global leade
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/06-today.png" width="230" alt="Today"/>
+  <img src="docs/screenshots/05-get-ready.png" width="230" alt="Get ready with the exercise animation"/>
   &nbsp;&nbsp;
-  <img src="docs/screenshots/07-workout-intro.png" width="230" alt="Workout intro with exercise animations"/>
+  <img src="docs/screenshots/07-tracking.png" width="230" alt="A tracked set"/>
   &nbsp;&nbsp;
-  <img src="docs/screenshots/09-levels.png" width="230" alt="Levels"/>
+  <img src="docs/screenshots/09-results.png" width="230" alt="Results"/>
 </p>
 
 ## Overview
 
-Most people quit training because sessions run long and nobody checks their form. Gym Guru keeps workouts short and gives feedback on every rep:
+Most people quit training because sessions run long and nobody checks their form. TOFU keeps workouts short and gives feedback on every rep:
 
 1. **Pick a level.** Each one is a short workout of 2–5 exercises with an animated demo of each move.
-2. **Train in front of the camera.** On-device pose tracking counts reps, times holds and flags form mistakes as they happen.
-3. **Level up.** Earn 1–3 stars, XP and badges, keep your daily streak, and climb the weekly leaderboard.
+2. **Train in front of the camera.** Each exercise starts with an animated demo and a position check. On-device pose tracking then counts reps, times holds and flags form mistakes, with spoken cues.
+3. **Level up.** Earn 1–3 stars, XP and achievements, keep your daily streak, and climb the weekly leaderboard.
 
 ### Features
 
@@ -45,8 +45,10 @@ Most people quit training because sessions run long and nobody checks their form
 | **20 levels** | 4 units of 5, each ending in a boss level. New exercises arrive unit by unit, and experience sets where you start. |
 | **Adapts to you** | Knee pain swaps lunges and jumping for bridges and eases squat depth; lower-back pain shortens planks. |
 | **Recommendations** | Today offers your next level plus a drill aimed at your weakest exercise and most common mistake. |
-| **Gamification** | Stars, XP, 6 ranks (Rookie → Legend), 9 badges, a daily-goal ring, streaks with earned freezes, and rewards for unlocks and rank-ups. |
+| **Gamification** | Stars, XP, 6 ranks (Rookie → Legend), 9 achievements, a daily-goal ring, streaks with earned freezes, and rewards for unlocks and rank-ups. |
 | **Leaderboard** | Weekly and all-time, top 50 plus your rank, shown by nickname only. |
+| **Voice coaching** | Spoken cues for each new exercise and for form mistakes, rate-limited so it never chatters. Short original sounds for reps, countdown and level-ups. Both can be turned off. |
+| **Help on demand** | A help button replays the exercise animation and pauses the set. |
 
 > [!NOTE]
 > Rep counting runs entirely on the device with Google ML Kit. Camera frames are never stored or uploaded. If the camera is unavailable or can't see you, the app offers a clearly labelled **demo set** that earns nothing.
@@ -57,27 +59,28 @@ Most people quit training because sessions run long and nobody checks their form
 
 <p>
   <img src="docs/screenshots/01-welcome.png" width="160" alt="Welcome and Google sign-in"/>
-  <img src="docs/screenshots/02-name.png" width="160" alt="Name and nickname"/>
-  <img src="docs/screenshots/03-goal.png" width="160" alt="Goal"/>
-  <img src="docs/screenshots/04-limitations.png" width="160" alt="Pain or limits"/>
-  <img src="docs/screenshots/05-plan.png" width="160" alt="Your plan"/>
+  <img src="docs/screenshots/02-goal.png" width="160" alt="Goal"/>
+  <img src="docs/screenshots/03-plan.png" width="160" alt="Your plan"/>
+  <img src="docs/screenshots/04-today.png" width="160" alt="Today"/>
 </p>
 
 **Training**
 
 <p>
-  <img src="docs/screenshots/06-today.png" width="160" alt="Today"/>
-  <img src="docs/screenshots/07-workout-intro.png" width="160" alt="Workout intro"/>
+  <img src="docs/screenshots/05-get-ready.png" width="160" alt="Get ready"/>
+  <img src="docs/screenshots/06-help.png" width="160" alt="Help sheet"/>
+  <img src="docs/screenshots/07-tracking.png" width="160" alt="Tracked set"/>
   <img src="docs/screenshots/08-next-up.png" width="160" alt="Next exercise"/>
-  <img src="docs/screenshots/09-levels.png" width="160" alt="Levels"/>
+  <img src="docs/screenshots/09-results.png" width="160" alt="Results"/>
 </p>
 
-**Progress and profile**
+**Levels, ranks and profile**
 
 <p>
-  <img src="docs/screenshots/10-leaderboard.png" width="160" alt="Leaderboard"/>
-  <img src="docs/screenshots/11-progress.png" width="160" alt="Progress and badges"/>
-  <img src="docs/screenshots/12-profile.png" width="160" alt="Profile"/>
+  <img src="docs/screenshots/10-levels.png" width="160" alt="Levels"/>
+  <img src="docs/screenshots/11-leaderboard.png" width="160" alt="Leaderboard"/>
+  <img src="docs/screenshots/12-progress.png" width="160" alt="Progress and achievements"/>
+  <img src="docs/screenshots/13-profile.png" width="160" alt="Profile"/>
 </p>
 
 ## Architecture
@@ -95,7 +98,7 @@ flowchart LR
     D --- T3[Leaderboard]
     D --- T4[Progress]
     T1 & T2 -- "Play" --> L[Workout intro]
-    L --> K[Camera setup<br/>+ countdown]
+    L --> K[Per exercise:<br/>demo → position check<br/>→ countdown → tracking]
     K --> W[Exercise 1 … n]
     W --> R[Results + rewards]
     R -- "Next level / Continue" --> D
@@ -116,13 +119,16 @@ lib/
 ├── game/
 │   ├── exercises.dart          The 6 exercises, their cues and form issues
 │   ├── levels.dart             The 20 levels, limitation adaptations, start levels
-│   └── progression.dart        Stars, XP, ranks, badges, drill recommendations
+│   └── progression.dart        Stars, XP, ranks, achievements, drill recommendations
+├── audio/
+│   ├── coach.dart              Text-to-speech and sounds, with rate limits
+│   └── workout_announcer.dart  Turns workout events into cues
 ├── data/
 │   ├── models.dart             Profile, SessionResult, BlockResult (JSON)
 │   ├── auth.dart               Google sign-in through Firebase Auth
 │   └── repository.dart         Firestore: profile, sessions, leaderboard
 ├── tracking/
-│   ├── tracker.dart            Workout lifecycle: setup → countdown → blocks → done
+│   ├── tracker.dart            Workout lifecycle: intro → setup → countdown → workout, per exercise
 │   ├── camera_tracker.dart     Front camera + ML Kit pose detection
 │   ├── analyzers.dart          Per-exercise rep counting and form checks (pure Dart)
 │   ├── simulated_tracker.dart  Scripted demo set
@@ -136,7 +142,7 @@ lib/
 
 ### Design decisions
 
-- **One source of truth:** `AppController` derives streak, XP, stars, unlocks, badges and the week strip from stored sessions instead of keeping separate counters.
+- **One source of truth:** `AppController` derives streak, XP, stars, unlocks, achievements and the week strip from stored sessions instead of keeping separate counters.
 - **Pose analysis:** each exercise has a pure-Dart analyzer working on 2D landmarks:
   - **Squats:** measured by how far the hips drop toward knee height, calibrated to the standing pose, which works facing the camera or side-on.
   - **Push-ups, lunges and bridges:** measured from joint angles.
@@ -144,10 +150,11 @@ lib/
   - **Jumping jacks:** checked for full arm and leg range.
   
   The analyzers were validated on real Kaggle exercise videos (see `tool/video_eval`).
-- **Setup gate:** counting starts only when the body is in frame, landmarks are confident and the user is still. Side-on exercises need just one full side visible.
+- **Setup gate:** before each exercise, counting starts only when the body is in frame, landmarks are confident and the user is still. Side-on exercises need just one full side visible.
+- **Coaching without chatter:** speech only for a new exercise, a form mistake, "three more" and "can't see you". The same line repeats at most every 8 s, any two lines are 3.5 s apart, and frequent feedback (clean reps, countdown) is a sound instead.
 - **Daily goal and streaks:** a day counts when active training time reaches the daily goal. Streak freezes (one per 500 XP, hold up to 2) cover a single missed day automatically.
 - **Leaderboard integrity:** on Firebase's free plan the app writes its own totals, so Firestore security rules check every write. Only you can write your row, XP never decreases, and one write can add at most one workout's XP.
-- **Offline-first:** Firestore's on-device cache keeps training working offline. Startup waits at most 4 seconds for the server before using cached data.
+- **Offline-first:** Firestore's on-device cache keeps training working offline. Startup shows cached data immediately and refreshes from the server in the background.
 - **Accessibility:** custom controls expose semantics, coaching cues are live regions, and animations show a still frame when the system's reduce-motion setting is on.
 
 ## Getting started
@@ -198,6 +205,7 @@ flutter test
 | Suite | Covers |
 | --- | --- |
 | `analyzers_test.dart` | Rep counting and form checks for all 6 exercises, plus setup checks |
+| `coach_test.dart` | Voice rate limits, mute settings, and which workout events speak or play sounds |
 | `app_controller_test.dart` | Stars, XP, ranks, levels, drills, daily-goal streaks, freezes, demo sets not saved, profile edits |
 | `app_flow_test.dart` | Sign-in, setup, a full level, leaderboard ranking, nickname edit, account deletion |
 | `exercise_demo_test.dart` | Every animation loads, swaps cleanly and respects reduced motion |
@@ -209,16 +217,17 @@ To re-run the real-video evaluation, extract poses with MediaPipe and run `POSES
 
 - [x] On-device pose tracking for 6 exercises
 - [x] Google sign-in, cloud sync and a global leaderboard
-- [x] 20 levels with stars, XP, ranks, badges and streaks
-- [ ] Voice coaching
+- [x] 20 levels with stars, XP, ranks, achievements and streaks
+- [x] Voice coaching and sound effects
 - [ ] Working share targets (Story, Message, Save)
 - [ ] Server-validated leaderboard scores (Cloud Functions)
 - [ ] iOS build
-- [ ] Custom app icon and launch screen
+- [x] Custom app icon
+- [ ] Launch screen
 
 ## Credits
 
-Exercise animations from [LottieFiles](https://lottiefiles.com) under the Lottie Simple License; see [assets/exercises/CREDITS.md](assets/exercises/CREDITS.md).
+Exercise animations from [LottieFiles](https://lottiefiles.com) under the Lottie Simple License; see [assets/exercises/CREDITS.md](assets/exercises/CREDITS.md). Sound effects were synthesised for this app.
 
 ## Author
 

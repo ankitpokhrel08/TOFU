@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gym_guru/app/app_controller.dart';
 import 'package:gym_guru/app_root.dart';
+import 'package:gym_guru/audio/coach.dart';
 import 'package:gym_guru/data/auth.dart';
 import 'package:gym_guru/theme/app_theme.dart';
 import 'package:gym_guru/tracking/simulated_tracker.dart';
@@ -10,7 +11,10 @@ import 'package:gym_guru/tracking/simulated_tracker.dart';
 import 'helpers.dart';
 
 void main() {
-  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+  setUpAll(() {
+    GoogleFonts.config.allowRuntimeFetching = false;
+    Coach.instance = Coach.silent();
+  });
 
   late Map<String, MemoryRepository> repos;
   late Map<String, LeaderboardEntry> board;
@@ -48,7 +52,7 @@ void main() {
     expect(find.text('Continue with Google'), findsOneWidget);
 
     await tap(tester, 'Continue with Google');
-    expect(find.text("Hey, I'm Guru! What should I call you?"), findsOneWidget);
+    expect(find.text("Hey, I'm Tofu! What should I call you?"), findsOneWidget);
     // Prefilled from the Google account.
     expect(find.widgetWithText(TextField, 'Sam'), findsNWidgets(2));
 
@@ -95,12 +99,34 @@ void main() {
     expect(find.text('8 squats'), findsOneWidget);
     expect(find.text('8 bridges'), findsOneWidget);
     await tap(tester, 'Start workout');
-    expect(find.text('CALIBRATING'), findsOneWidget);
 
-    // Setup + countdown + 8 squats + turn side-on + 8 bridges.
-    for (var i = 0; i < 220; i++) {
+    // Each exercise opens with its demo and waits for the user.
+    expect(find.text('First · exercise 1 of 2'), findsOneWidget);
+    await tap(tester, "I'm ready");
+    expect(find.text('CALIBRATING'), findsOneWidget);
+    expect(find.text('Face the camera or stand side-on, whole body in frame'), findsOneWidget);
+
+    // Help pauses the set and shows the how-to sheet.
+    for (var i = 0; i < 30; i++) {
       await tester.pump(const Duration(milliseconds: 300));
     }
+    await tester.tap(find.bySemanticsLabel('How to do this exercise'));
+    await settle(tester);
+    expect(find.text('How to: Squat'), findsOneWidget);
+    await tap(tester, 'Got it');
+
+    // Squats, then the bridge intro waits for the user again.
+    var sawBridgeIntro = false;
+    for (var i = 0; i < 240; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+      if (find.text("I'm ready").evaluate().isNotEmpty) {
+        sawBridgeIntro = true;
+        expect(find.text('Nice! Next · exercise 2 of 2'), findsOneWidget);
+        await tap(tester, "I'm ready");
+        expect(find.text('Turn side-on to the camera'), findsOneWidget);
+      }
+    }
+    expect(sawBridgeIntro, isTrue);
     await settle(tester);
 
     expect(find.text('LEVEL 1 CLEARED'), findsOneWidget);

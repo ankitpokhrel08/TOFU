@@ -49,7 +49,7 @@ class LimitationsScreen extends StatelessWidget {
             ],
           ),
           Text(
-            'Gym Guru is not medical advice. Stop if anything hurts and check with a professional.',
+            'TOFU is not medical advice. Stop if anything hurts and check with a professional.',
             style: nunito(12, weight: FontWeight.w600, color: AppColors.textMuted),
           ),
         ],

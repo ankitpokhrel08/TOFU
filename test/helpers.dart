@@ -86,6 +86,9 @@ class MemoryRepository implements Repository {
   final _weeks = <String, String>{};
 
   @override
+  Future<UserData> loadFromServer() => load();
+
+  @override
   Future<void> saveProfile(Profile p, LeaderboardUpdate b) async {
     writes++;
     profile = p;

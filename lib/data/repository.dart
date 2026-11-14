@@ -39,7 +39,11 @@ abstract class Repository {
   /// Signed-in user's id.
   String get uid;
 
+  /// Fast load (on-device cache when available).
   Future<UserData> load();
+
+  /// Up-to-date data from the server, for refreshing after a fast load.
+  Future<UserData> loadFromServer();
   Future<void> saveProfile(Profile p, LeaderboardUpdate board);
 
   /// Saves a workout and the new leaderboard totals together.
@@ -74,20 +78,34 @@ class FirestoreRepository implements Repository {
   /// Waits this long for the server before using the on-device cache.
   static const _serverTimeout = Duration(seconds: 4);
 
+  /// Opens instantly from the on-device cache when it has a profile; the
+  /// first launch on a device (empty cache) goes to the server.
   @override
   Future<UserData> load() async {
-    // Prefer fresh server data (another phone may have trained since), but
-    // fall back to the cache quickly when the connection is slow or offline.
-    Future<T> fresh<T>(Future<T> Function(GetOptions) get) async {
-      try {
-        return await get(const GetOptions(source: Source.server)).timeout(_serverTimeout);
-      } on Object {
-        return get(const GetOptions(source: Source.cache));
-      }
+    try {
+      final cached = await _read(Source.cache);
+      if (cached.profile != null) return cached;
+    } on Object {
+      // Nothing cached yet.
     }
+    return loadFromServer();
+  }
 
-    final user = await fresh(_user.get);
-    final sessions = await fresh(_sessions.orderBy('at').get);
+  /// Fresh data from the server, falling back to the cache when the
+  /// connection is slow or offline.
+  @override
+  Future<UserData> loadFromServer() async {
+    try {
+      return await _read(Source.server).timeout(_serverTimeout);
+    } on Object {
+      return _read(Source.cache);
+    }
+  }
+
+  Future<UserData> _read(Source source) async {
+    final options = GetOptions(source: source);
+    final user = await _user.get(options);
+    final sessions = await _sessions.orderBy('at').get(options);
     final data = user.data();
     return UserData(
       profile: data?['profile'] == null

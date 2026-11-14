@@ -233,10 +233,7 @@ class _Card extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'GYM GURU',
-                  style: baloo(13, color: fg.withValues(alpha: .8), letterSpacing: 2.3),
-                ),
+                Text('TOFU', style: baloo(13, color: fg.withValues(alpha: .8), letterSpacing: 2.3)),
                 const SizedBox(height: 18),
                 Text(style.big, style: baloo(64, height: .9, color: fg)),
                 const SizedBox(height: 4),
@@ -261,10 +258,7 @@ class _Card extends StatelessWidget {
           Positioned(
             left: 24,
             bottom: 22,
-            child: Text(
-              'Train with Guru\ngymguru.app',
-              style: nunito(12, color: fg.withValues(alpha: .8)),
-            ),
+            child: Text('Train with TOFU', style: nunito(12, color: fg.withValues(alpha: .8))),
           ),
         ],
       ),

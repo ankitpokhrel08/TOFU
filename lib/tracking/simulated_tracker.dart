@@ -32,12 +32,15 @@ class SimulatedTracker extends WorkoutTracker {
 
   @override
   Future<void> start() async {
-    setPhase(TrackerPhase.setup);
+    setPhase(TrackerPhase.intro);
     _timer = Timer.periodic(tick, (_) => _step());
   }
 
   @override
   void onBlockStart() => _ticks = 0;
+
+  @override
+  void onSetupStart() => _setup = 0;
 
   FormIssue? _scripted(int rep) {
     final issues = block.exercise.issues;
