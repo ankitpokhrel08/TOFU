@@ -44,19 +44,24 @@ jobs:
     env:
       GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
       FIREBASE_OPTIONS_DART: ${{ secrets.FIREBASE_OPTIONS_DART }}
+      SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Write Firebase config
         id: config
         run: |
-          if [ -z "$GOOGLE_SERVICES_JSON" ] || [ -z "$FIREBASE_OPTIONS_DART" ]; then
-            echo "Firebase secrets not set; skipping the APK build."
+          if [ -z "$GOOGLE_SERVICES_JSON" ] || [ -z "$FIREBASE_OPTIONS_DART" ] || [ -z "$SIGNING_KEYSTORE" ]; then
+            echo "Firebase or signing secrets not set; skipping the APK build."
             echo "ready=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "$GOOGLE_SERVICES_JSON" | base64 -d > android/app/google-services.json
           echo "$FIREBASE_OPTIONS_DART" | base64 -d > lib/firebase_options.dart
+          # Sign with the key whose SHA-1 is registered in Firebase, or
+          # Google sign-in fails in the built APK.
+          mkdir -p ~/.android
+          echo "$SIGNING_KEYSTORE" | base64 -d > ~/.android/debug.keystore
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - if: steps.config.outputs.ready == 'true'
