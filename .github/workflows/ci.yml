@@ -60,8 +60,8 @@ jobs:
           echo "$FIREBASE_OPTIONS_DART" | base64 -d > lib/firebase_options.dart
           # Sign with the key whose SHA-1 is registered in Firebase, or
           # Google sign-in fails in the built APK.
-          mkdir -p ~/.android
-          echo "$SIGNING_KEYSTORE" | base64 -d > ~/.android/debug.keystore
+          echo "$SIGNING_KEYSTORE" | base64 -d > "$RUNNER_TEMP/tofu.keystore"
+          echo "TOFU_KEYSTORE=$RUNNER_TEMP/tofu.keystore" >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - if: steps.config.outputs.ready == 'true'
